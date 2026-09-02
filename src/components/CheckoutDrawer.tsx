@@ -86,11 +86,17 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
       }
 
       if (!res.ok) {
-        if (data?.error) {
-          throw new Error(data.error);
+        let extractedErr = "";
+        if (typeof data?.error === "string") {
+          extractedErr = data.error;
+        } else if (typeof data?.error?.message === "string") {
+          extractedErr = data.error.message;
+        } else if (typeof data?.message === "string") {
+          extractedErr = data.message;
         }
-        if (data?.message) {
-          throw new Error(data.message);
+
+        if (extractedErr) {
+          throw new Error(extractedErr);
         }
 
         // Handle HTML or non-JSON error pages (like 404/500/502) gracefully
@@ -116,7 +122,11 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
       }
 
       if (!data.success && data.error) {
-        throw new Error(data.error || "Failed to process checkout");
+        const errorStr =
+          typeof data.error === "string"
+            ? data.error
+            : data.error?.message || "Failed to process checkout. Please try again.";
+        throw new Error(errorStr);
       }
 
       if (paymentMethod === "QRPH" && data.qrCodeUrl) {
@@ -129,7 +139,15 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
       }
     } catch (err: any) {
       console.error("Checkout error:", err);
-      setErrorMessage(err.message || "An unexpected error occurred during checkout");
+      const safeStringError =
+        typeof err === "string"
+          ? err
+          : typeof err?.message === "string"
+          ? err.message
+          : typeof err?.error === "string"
+          ? err.error
+          : "Failed to process checkout. Please try again.";
+      setErrorMessage(safeStringError);
     } finally {
       setIsSubmitting(false);
     }
@@ -186,7 +204,13 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
           {errorMessage && (
             <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs text-rose-800">
               <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
-              <span>{errorMessage}</span>
+              <span>
+                {typeof errorMessage === "string"
+                  ? errorMessage
+                  : (errorMessage as any)?.message ||
+                    (errorMessage as any)?.error ||
+                    "Failed to process checkout. Please try again."}
+              </span>
             </div>
           )}
 
