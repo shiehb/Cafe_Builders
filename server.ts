@@ -435,6 +435,13 @@ app.post("/api/webhooks/paymongo/simulate", (req, res) => {
   });
 });
 
+// Express fallback for unmatched /api/* routes: Always return JSON 404 instead of HTML
+app.all("/api/*", (req, res) => {
+  res.status(404).json({
+    error: `API route ${req.method} ${req.path} not found.`,
+  });
+});
+
 // Vite Middleware for Frontend Serving
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {

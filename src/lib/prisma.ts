@@ -17,13 +17,17 @@ export function getPrismaClient(): PrismaClient | null {
     return null;
   }
 
-  if (!prismaInstance) {
-    prismaInstance = new PrismaClient({
-      log: ["warn", "error"],
-    });
+  try {
+    if (!prismaInstance) {
+      prismaInstance = new PrismaClient({
+        log: ["warn", "error"],
+      });
+    }
+    return prismaInstance;
+  } catch (e) {
+    console.warn("[AI Studio] PrismaClient initialization skipped — using in-memory store", e);
+    return null;
   }
-
-  return prismaInstance;
 }
 
 /**

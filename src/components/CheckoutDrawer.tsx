@@ -74,51 +74,66 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
         body: JSON.stringify(payload),
       });
 
-      let data: any = null;
-      const contentType = res.headers.get("content-type") || "";
+      // 1. SAFE API PARSING: Check response.ok BEFORE calling response.json()
+      if (!res.ok) {
+        // Read response.text() first to catch 404/500 HTML error pages gracefully
+        const errorText = await res.text().catch(() => "");
+        let serverErrorMsg = "";
 
-      if (contentType.includes("application/json")) {
-        try {
-          data = await res.json();
-        } catch {
-          data = null;
+        // Attempt to extract JSON error message if the server returned JSON
+        if (errorText) {
+          try {
+            const errJson = JSON.parse(errorText);
+            serverErrorMsg =
+              typeof errJson.error === "string"
+                ? errJson.error
+                : typeof errJson.error?.message === "string"
+                ? errJson.error.message
+                : typeof errJson.message === "string"
+                ? errJson.message
+                : "";
+          } catch {
+            // Not valid JSON (e.g. HTML 404 "The page could not be found" or 500 error page)
+          }
+        }
+
+        if (serverErrorMsg) {
+          throw new Error(serverErrorMsg);
+        }
+
+        const isHtml =
+          errorText.toLowerCase().includes("<!doctype") ||
+          errorText.toLowerCase().includes("<html") ||
+          errorText.toLowerCase().includes("the page could not be found");
+
+        if (res.status === 404 || isHtml) {
+          throw new Error(
+            "Checkout API endpoint could not be found (404: The page could not be found). Please ensure serverless routes are deployed on Vercel, or try 'Cash at Counter'."
+          );
+        } else if (res.status >= 500) {
+          throw new Error(
+            `Server error (${res.status}) while processing checkout. Please try again or choose 'Cash at Counter'.`
+          );
+        } else {
+          throw new Error(
+            errorText.trim() && !isHtml
+              ? errorText.slice(0, 160)
+              : `Checkout request failed with status ${res.status}. Please try again.`
+          );
         }
       }
 
-      if (!res.ok) {
-        let extractedErr = "";
-        if (typeof data?.error === "string") {
-          extractedErr = data.error;
-        } else if (typeof data?.error?.message === "string") {
-          extractedErr = data.error.message;
-        } else if (typeof data?.message === "string") {
-          extractedErr = data.message;
-        }
-
-        if (extractedErr) {
-          throw new Error(extractedErr);
-        }
-
-        // Handle HTML or non-JSON error pages (like 404/500/502) gracefully
-        const rawText = !data ? await res.text().catch(() => "") : "";
-        const isHtml = rawText.includes("<html") || rawText.includes("<!DOCTYPE");
-
-        if (isHtml || !rawText.trim()) {
-          if (res.status === 404) {
-            throw new Error("Checkout endpoint is currently unavailable (404). Please try again in a moment.");
-          } else if (res.status >= 500) {
-            throw new Error("Server encountered an issue processing checkout. Please try again or pay with Cash at Counter.");
-          } else {
-            throw new Error(`Checkout failed with status ${res.status}. Please try again.`);
-          }
-        } else {
-          // If short plaintext error returned
-          throw new Error(rawText.slice(0, 150));
-        }
+      // 2. Response is OK (200/201), safely parse JSON:
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        console.error("Failed to parse checkout JSON response:", parseErr);
+        throw new Error("Unable to parse server checkout response. Please check your order history or try again.");
       }
 
       if (!data) {
-        throw new Error("Unable to parse server checkout response. Please verify your order and try again.");
+        throw new Error("No response data returned from checkout server. Please try again.");
       }
 
       if (!data.success && data.error) {
@@ -202,13 +217,33 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
         <form onSubmit={handleCheckoutSubmit} className="space-y-5 pb-2">
           {/* Error Banner */}
           {errorMessage && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs text-rose-800">
-              <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
-              <span>
-                {typeof errorMessage === "string"
-                  ? errorMessage
-                  : (errorMessage as any)?.message || JSON.stringify(errorMessage)}
-              </span>
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl space-y-2 text-xs text-rose-800">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-bold text-rose-900">Checkout Error</p>
+                  <p className="mt-0.5 text-rose-700 leading-relaxed">
+                    {typeof errorMessage === "string"
+                      ? errorMessage
+                      : (errorMessage as any)?.message || JSON.stringify(errorMessage)}
+                  </p>
+                </div>
+              </div>
+              {paymentMethod === "QRPH" && (
+                <div className="pt-1.5 border-t border-rose-200/60 flex items-center justify-between">
+                  <span className="text-[11px] text-rose-600">Want to order right now?</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod("CASH");
+                      setErrorMessage(null);
+                    }}
+                    className="px-2.5 py-1 bg-white hover:bg-stone-50 border border-rose-300 rounded-lg text-[11px] font-bold text-rose-800 transition-all cursor-pointer shadow-xs"
+                  >
+                    Switch to Cash at Counter
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
