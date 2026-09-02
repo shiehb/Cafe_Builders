@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     const { items, customerName, orderType = "DINE_IN", paymentMethod, notes } = body;
 
     if (!items || items.length === 0) {
-      return new Response(JSON.stringify({ error: "No items provided in cart" }), {
+      return new Response(JSON.stringify({ success: false, error: "No items provided in cart" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });

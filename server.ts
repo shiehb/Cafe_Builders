@@ -116,7 +116,7 @@ app.post("/api/checkout", async (req, res) => {
     const { items, customerName, orderType = "DINE_IN", paymentMethod, notes } = body;
 
     if (!items || items.length === 0) {
-      return res.status(400).json({ error: "Cart is empty. Please add items." });
+      return res.status(400).json({ success: false, error: "Cart is empty. Please add items." });
     }
 
     const subtotal = items.reduce((sum, it) => sum + (it.subtotal || it.unitPrice * it.quantity), 0);

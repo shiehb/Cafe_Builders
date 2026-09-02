@@ -67,13 +67,55 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
 
       const res = await fetch("/api/checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      let data: any = null;
+      const contentType = res.headers.get("content-type") || "";
 
-      if (!res.ok || !data.success) {
+      if (contentType.includes("application/json")) {
+        try {
+          data = await res.json();
+        } catch {
+          data = null;
+        }
+      }
+
+      if (!res.ok) {
+        if (data?.error) {
+          throw new Error(data.error);
+        }
+        if (data?.message) {
+          throw new Error(data.message);
+        }
+
+        // Handle HTML or non-JSON error pages (like 404/500/502) gracefully
+        const rawText = !data ? await res.text().catch(() => "") : "";
+        const isHtml = rawText.includes("<html") || rawText.includes("<!DOCTYPE");
+
+        if (isHtml || !rawText.trim()) {
+          if (res.status === 404) {
+            throw new Error("Checkout endpoint is currently unavailable (404). Please try again in a moment.");
+          } else if (res.status >= 500) {
+            throw new Error("Server encountered an issue processing checkout. Please try again or pay with Cash at Counter.");
+          } else {
+            throw new Error(`Checkout failed with status ${res.status}. Please try again.`);
+          }
+        } else {
+          // If short plaintext error returned
+          throw new Error(rawText.slice(0, 150));
+        }
+      }
+
+      if (!data) {
+        throw new Error("Unable to parse server checkout response. Please verify your order and try again.");
+      }
+
+      if (!data.success && data.error) {
         throw new Error(data.error || "Failed to process checkout");
       }
 
