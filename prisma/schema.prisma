@@ -1,0 +1,99 @@
+// Prisma Schema for Cafe Web Ordering App (Phase 1)
+// PostgreSQL datasource with models for Category, Product, Order, and OrderItem
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  PREPARING
+  READY
+  COMPLETED
+}
+
+enum PaymentMethod {
+  QRPH
+  CASH
+}
+
+enum OrderType {
+  DINE_IN
+  TAKEAWAY
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  icon        String?
+  sortOrder   Int       @default(0)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("categories")
+}
+
+model Product {
+  id          String      @id @default(cuid())
+  name        String
+  description String
+  price       Float       // Stored in Philippine Pesos (PHP), e.g. 165.00
+  imageUrl    String
+  categoryId  String
+  category    Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  isAvailable Boolean     @default(true)
+  popular     Boolean     @default(false)
+  temperature String?     // e.g., "HOT", "ICED", "BOTH"
+  orderItems  OrderItem[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("products")
+}
+
+model Order {
+  id              String        @id @default(cuid())
+  orderNumber     String        @unique // e.g. "C-001", "C-002"
+  status          OrderStatus   @default(PENDING_PAYMENT)
+  paymentMethod   PaymentMethod
+  paymentIntentId String?       // PayMongo Payment Intent ID (e.g., "pi_xxx")
+  paymentMethodId String?       // PayMongo Payment Method ID (e.g., "pm_xxx")
+  qrCodeUrl       String?       // Generated dynamic QR Ph image or data URL
+  customerName    String?       // Optional customer identifier
+  orderType       OrderType     @default(DINE_IN)
+  notes           String?
+  subtotal        Float
+  serviceFee      Float         @default(0.0)
+  totalAmount     Float         // Final order amount in PHP
+  items           OrderItem[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id             String   @id @default(cuid())
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId      String?
+  product        Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName    String   // Snapshot of item name at time of purchase
+  unitPrice      Float    // Price in PHP
+  quantity       Int      @default(1)
+  subtotal       Float    // (unitPrice * quantity) + addons
+  customizations Json?    // { temperature: "Iced", sweetness: "50%", addons: ["Oat Milk", "Extra Shot"] }
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  @@map("order_items")
+}

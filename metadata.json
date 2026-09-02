@@ -1,0 +1,6 @@
+{
+  "name": "Cafe QR Ph Ordering App",
+  "description": "Modern Cafe Web Ordering App featuring Category Menu, Floating Cart Drawer, PayMongo Dynamic QR Ph & Cash checkout, PayMongo Webhooks, Supabase Realtime sync, and Live Kitchen Display System (KDS).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
