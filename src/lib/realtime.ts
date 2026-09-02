@@ -186,3 +186,80 @@ export function emitLocalOrderEvent(
   });
   window.dispatchEvent(ev);
 }
+
+/**
+ * Hook to subscribe to live Product Inventory & Availability Updates (Supabase Realtime + SSE + Local)
+ */
+export function useProductInventoryRealtime(onProductUpdated: (product: any) => void) {
+  useEffect(() => {
+    let sseSource: EventSource | null = null;
+    let isSubscribed = true;
+
+    // 1. Supabase Realtime channel `menu-updates`
+    const supabase = getSupabaseClient();
+    let supabaseChannel: any = null;
+
+    if (supabase) {
+      try {
+        supabaseChannel = supabase
+          .channel("menu-updates")
+          .on("broadcast", { event: "product_updated" }, (res: any) => {
+            if (isSubscribed && res?.payload?.product) {
+              onProductUpdated(res.payload.product);
+            }
+          })
+          .subscribe();
+      } catch (err) {
+        console.warn("Supabase product updates subscription error:", err);
+      }
+    }
+
+    // 2. Server-Sent Events (SSE) stream from backend
+    try {
+      sseSource = new EventSource("/api/realtime/stream");
+      sseSource.onmessage = (event) => {
+        if (!isSubscribed) return;
+        try {
+          const data = JSON.parse(event.data);
+          if (data && data.type === "product_updated" && data.product) {
+            onProductUpdated(data.product);
+          }
+        } catch {}
+      };
+    } catch (e) {
+      console.warn("SSE product inventory connection error:", e);
+    }
+
+    // 3. Local In-Window Event
+    const handleLocalEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<{ product: any }>;
+      if (isSubscribed && customEvent.detail?.product) {
+        onProductUpdated(customEvent.detail.product);
+      }
+    };
+
+    window.addEventListener("cafe_realtime_product", handleLocalEvent);
+
+    return () => {
+      isSubscribed = false;
+      if (supabase && supabaseChannel) {
+        supabase.removeChannel(supabaseChannel);
+      }
+      if (sseSource) {
+        sseSource.close();
+      }
+      window.removeEventListener("cafe_realtime_product", handleLocalEvent);
+    };
+  }, [onProductUpdated]);
+}
+
+/**
+ * Dispatches an instant local window event for product updates
+ */
+export function emitLocalProductEvent(product: any) {
+  if (typeof window === "undefined") return;
+  const ev = new CustomEvent("cafe_realtime_product", {
+    detail: { product },
+  });
+  window.dispatchEvent(ev);
+}

@@ -2,9 +2,10 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { Order } from "../types";
 
 let supabaseClient: SupabaseClient | null = null;
+let supabaseAdminClient: SupabaseClient | null = null;
 
 /**
- * Returns the active Supabase client or null if not configured
+ * Returns the public Supabase client (using anon key, subject to Row Level Security)
  */
 export function getSupabaseClient(): SupabaseClient | null {
   if (supabaseClient) return supabaseClient;
@@ -16,9 +17,7 @@ export function getSupabaseClient(): SupabaseClient | null {
     metaEnv?.VITE_SUPABASE_URL;
 
   const anonKey =
-    (typeof process !== "undefined"
-      ? process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
-      : undefined) ||
+    (typeof process !== "undefined" ? process.env.SUPABASE_ANON_KEY : undefined) ||
     metaEnv?.VITE_SUPABASE_ANON_KEY;
 
   if (url && anonKey && !url.includes("placeholder") && !anonKey.includes("placeholder")) {
@@ -32,7 +31,37 @@ export function getSupabaseClient(): SupabaseClient | null {
       });
       return supabaseClient;
     } catch (e) {
-      console.warn("Could not create Supabase client:", e);
+      console.warn("Could not create public Supabase client:", e);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Returns the privileged Supabase Admin client (using service_role key, bypassing RLS for server writes)
+ * MUST only be used on server-side in API routes with verified admin credentials.
+ */
+export function getSupabaseAdminClient(): SupabaseClient | null {
+  if (supabaseAdminClient) return supabaseAdminClient;
+
+  const url = typeof process !== "undefined" ? process.env.SUPABASE_URL : undefined;
+  const serviceKey =
+    typeof process !== "undefined"
+      ? process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
+      : undefined;
+
+  if (url && serviceKey && !url.includes("placeholder") && !serviceKey.includes("placeholder")) {
+    try {
+      supabaseAdminClient = createClient(url, serviceKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      });
+      return supabaseAdminClient;
+    } catch (e) {
+      console.warn("Could not create Supabase admin client:", e);
     }
   }
 
@@ -43,6 +72,7 @@ export function getSupabaseClient(): SupabaseClient | null {
  * Realtime Event Types for Cafe Ordering
  */
 export type RealtimeOrderEvent = "order_paid" | "order_created" | "order_status_updated";
+export type RealtimeMenuEvent = "product_updated" | "inventory_changed";
 
 export interface RealtimeOrderPayload {
   event: RealtimeOrderEvent;
@@ -74,6 +104,31 @@ export async function broadcastKitchenOrder(
     return true;
   } catch (err) {
     console.warn("Failed to broadcast to Supabase Realtime:", err);
+    return false;
+  }
+}
+
+/**
+ * Broadcasts a product update event across Supabase Realtime channel `menu-updates`
+ */
+export async function broadcastProductUpdate(product: any): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return false;
+
+  try {
+    const channel = supabase.channel("menu-updates");
+    await channel.send({
+      type: "broadcast",
+      event: "product_updated",
+      payload: {
+        event: "product_updated",
+        product,
+        timestamp: new Date().toISOString(),
+      },
+    });
+    return true;
+  } catch (err) {
+    console.warn("Failed to broadcast product update to Supabase Realtime:", err);
     return false;
   }
 }

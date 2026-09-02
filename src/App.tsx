@@ -22,11 +22,37 @@ import { KitchenKdsDrawer } from "./components/KitchenKdsDrawer";
 import { ViewAllDrawer } from "./components/ViewAllDrawer";
 import { Search, X, ShoppingBag, ArrowRight } from "lucide-react";
 import { formatPrice } from "./lib/utils";
-import { useKitchenRealtime } from "./lib/realtime";
+import { useKitchenRealtime, useProductInventoryRealtime } from "./lib/realtime";
+import { usePath } from "./lib/router";
+import { KdsPage } from "./pages/KdsPage";
+import { PosPage } from "./pages/PosPage";
+import { AdminPage } from "./pages/AdminPage";
 
 const LOCAL_STORAGE_ORDERS_KEY = "cafe_orders_history";
 
 export default function App() {
+  const currentPath = usePath();
+
+  // ROUTE 1: Staff Kitchen Board (/kds)
+  if (currentPath === "/kds") {
+    return <KdsPage />;
+  }
+
+  // ROUTE 2: Staff Cashier POS (/pos)
+  if (currentPath === "/pos") {
+    return <PosPage />;
+  }
+
+  // ROUTE 3: Store Manager Admin (/admin)
+  if (currentPath === "/admin") {
+    return <AdminPage />;
+  }
+
+  // ROUTE 4: Public Customer App (/)
+  return <CustomerApp />;
+}
+
+function CustomerApp() {
   // Menu Data State
   const [categories, setCategories] = useState<Category[]>(CATEGORIES);
   const [products, setProducts] = useState<Product[]>(PRODUCTS);
@@ -121,6 +147,16 @@ export default function App() {
       },
       [handleOrderUpdated]
     )
+  );
+
+  // Global Realtime listener for live product inventory & availability updates
+  useProductInventoryRealtime(
+    useCallback((updatedProduct: Product) => {
+      if (!updatedProduct || !updatedProduct.id) return;
+      setProducts((prev) =>
+        prev.map((p) => (p.id === updatedProduct.id ? { ...p, ...updatedProduct } : p))
+      );
+    }, [])
   );
 
   // Fetch live products & categories from server API if available

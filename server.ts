@@ -1,13 +1,21 @@
 import express, { Response } from "express";
 import path from "path";
 import crypto from "crypto";
+import cookieParser from "cookie-parser";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { createPayMongoQRPhPayment } from "./src/lib/paymongo";
-import { Order, OrderStatus, CheckoutPayload } from "./src/types";
+import { Order, OrderStatus, CheckoutPayload, Product } from "./src/types";
 import { CATEGORIES, PRODUCTS } from "./src/data/menuData";
-import { broadcastKitchenOrder } from "./src/lib/supabase";
+import { broadcastKitchenOrder, broadcastProductUpdate, getSupabaseClient, getSupabaseAdminClient } from "./src/lib/supabase";
 import { getPrismaClient, seedDatabaseIfEmpty } from "./src/lib/prisma";
+import {
+  ADMIN_COOKIE_NAME,
+  verifyAdminPin,
+  createSignedSessionToken,
+  isRequestAuthorized,
+} from "./src/lib/auth";
+import { expressAdminAuthMiddleware } from "./src/middleware";
 
 dotenv.config();
 
@@ -19,6 +27,9 @@ seedDatabaseIfEmpty().catch((err) => {
   console.warn("Prisma startup seeding skipped:", (err as Error)?.message || err);
 });
 
+// Parse cookies for secure HttpOnly admin_session validation
+app.use(cookieParser());
+
 // Capture raw body for webhook signature verification
 app.use(
   express.json({
@@ -28,9 +39,14 @@ app.use(
   })
 );
 
-// In-memory database store with persistence during server lifecycle
+// In-memory database stores with persistence during server lifecycle
 let orderSequence = 1;
 const ordersStore: Map<string, Order> = new Map();
+
+// In-memory products store initialized from static catalog
+const productsStore: Map<string, Product> = new Map(
+  PRODUCTS.map((p) => [p.id, { ...p }])
+);
 
 // SSE Connected clients for instant low-latency real-time updates
 const sseClients: Set<Response> = new Set();
@@ -66,6 +82,31 @@ function broadcastRealtime(
   }
 }
 
+/**
+ * Broadcasts a product inventory update event to all active SSE streams and Supabase Realtime
+ */
+function broadcastProductRealtime(type: "product_updated", product: Product) {
+  // 1. Broadcast to Supabase Realtime channel `menu-updates`
+  broadcastProductUpdate(product).catch((err) =>
+    console.warn("Supabase Realtime product broadcast warning:", err)
+  );
+
+  // 2. Broadcast to connected SSE clients
+  const payload = JSON.stringify({
+    type,
+    product,
+    timestamp: new Date().toISOString(),
+  });
+
+  for (const client of sseClients) {
+    try {
+      client.write(`data: ${payload}\n\n`);
+    } catch {
+      sseClients.delete(client);
+    }
+  }
+}
+
 // Helper to format order number
 function getNextOrderNumber(): string {
   const num = String(orderSequence++).padStart(3, "0");
@@ -76,9 +117,10 @@ function getNextOrderNumber(): string {
 app.get("/api/health", (_req, res) => {
   res.json({
     status: "ok",
-    app: "Cafe Web Ordering App (Phase 2 - Realtime KDS & PayMongo Webhooks)",
+    app: "Cafe Web Ordering App (Admin & Inventory Security System)",
     time: new Date().toISOString(),
     ordersCount: ordersStore.size,
+    productsCount: productsStore.size,
     connectedClients: sseClients.size,
   });
 });
@@ -100,20 +142,221 @@ app.get("/api/realtime/stream", (req, res) => {
   });
 });
 
-// 3. Categories & Products
+// ==============================================================================
+// SERVER-SIDE AUTH & PIN GUARD ENDPOINTS
+// ==============================================================================
+
+/**
+ * POST /api/auth/login
+ * Verifies 4-digit PIN against server-side process.env.ADMIN_PIN (never exposed to browser)
+ * On success, issues a cryptographically signed, HttpOnly, SameSite cookie: `admin_session`
+ */
+app.post("/api/auth/login", (req, res) => {
+  const { pin, role = "admin" } = req.body || {};
+
+  if (!pin || typeof pin !== "string") {
+    return res.status(400).json({ success: false, error: "4-digit PIN is required" });
+  }
+
+  const isValid = verifyAdminPin(pin, role);
+
+  if (!isValid) {
+    return res.status(401).json({
+      success: false,
+      error: "Incorrect PIN. Access denied.",
+      code: "INVALID_CREDENTIALS",
+    });
+  }
+
+  // Generate signed session token with 24h validity
+  const sessionToken = createSignedSessionToken(role, 24);
+
+  // Set HttpOnly, Secure session cookie (tamper-proof)
+  res.cookie(ADMIN_COOKIE_NAME, sessionToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    path: "/",
+  });
+
+  return res.json({
+    success: true,
+    role,
+    message: "Admin session authenticated successfully with HttpOnly cookie",
+  });
+});
+
+/**
+ * GET /api/auth/session
+ * Checks whether the current caller presents a valid HttpOnly `admin_session`
+ */
+app.get("/api/auth/session", (req, res) => {
+  const authorized = isRequestAuthorized(req);
+  res.json({
+    authenticated: authorized,
+    role: authorized ? "admin" : null,
+  });
+});
+
+/**
+ * POST /api/auth/logout
+ * Clears the HttpOnly `admin_session` cookie
+ */
+app.post("/api/auth/logout", (_req, res) => {
+  res.clearCookie(ADMIN_COOKIE_NAME, { path: "/" });
+  res.json({ success: true, message: "Admin session cleared successfully" });
+});
+
+// ==============================================================================
+// PUBLIC MENU & PRODUCT ENDPOINTS (RLS COMPLIANT)
+// ==============================================================================
+
+// Categories API
 app.get("/api/categories", (_req, res) => {
   res.json({ data: CATEGORIES });
 });
 
-app.get("/api/products", (req, res) => {
+/**
+ * Public Customer Products API
+ * In compliance with RLS constraints:
+ * Reads from public store or Supabase public anon client.
+ * Returns products with current isAvailable status. If availableOnly query is set,
+ * returns only `isAvailable === true` items.
+ */
+app.get("/api/products", async (req, res) => {
   const categoryId = req.query.category as string;
-  if (categoryId && categoryId !== "all") {
-    return res.json({
-      data: PRODUCTS.filter((p) => p.categoryId === categoryId || p.categoryName === categoryId),
-    });
+  const availableOnly = req.query.availableOnly === "true";
+
+  // Check Supabase public anon client if available
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      let query = supabase.from("products").select("*");
+      // Public customer RLS policy: only is_available = true
+      if (availableOnly) {
+        query = query.eq("is_available", true);
+      }
+      if (categoryId && categoryId !== "all") {
+        query = query.eq("category_id", categoryId);
+      }
+      const { data, error } = await query;
+      if (!error && data && data.length > 0) {
+        return res.json({ data });
+      }
+    } catch (err) {
+      console.warn("Supabase public products read error, falling back to local store:", err);
+    }
   }
-  res.json({ data: PRODUCTS });
+
+  let list = Array.from(productsStore.values());
+
+  if (availableOnly) {
+    list = list.filter((p) => p.isAvailable === true);
+  }
+
+  if (categoryId && categoryId !== "all") {
+    list = list.filter((p) => p.categoryId === categoryId || p.categoryName === categoryId);
+  }
+
+  res.json({ data: list });
 });
+
+// ==============================================================================
+// PROTECTED ADMIN INVENTORY & PRODUCT MANAGEMENT ENDPOINTS
+// Enforced by expressAdminAuthMiddleware (Valid HttpOnly admin_session required)
+// ==============================================================================
+
+app.use(expressAdminAuthMiddleware);
+
+/**
+ * GET /api/admin/products
+ * Returns all products with complete inventory & availability attributes
+ */
+app.get("/api/admin/products", async (_req, res) => {
+  try {
+    // If Supabase Admin client exists, query directly using service_role
+    const supabaseAdmin = getSupabaseAdminClient();
+    if (supabaseAdmin) {
+      const { data, error } = await supabaseAdmin
+        .from("products")
+        .select("*")
+        .order("name", { ascending: true });
+      if (!error && data && data.length > 0) {
+        return res.json({ data });
+      }
+    }
+  } catch (err) {
+    console.warn("Supabase admin fetch products fallback:", err);
+  }
+
+  const list = Array.from(productsStore.values());
+  res.json({ data: list });
+});
+
+/**
+ * PATCH /api/admin/products/:id
+ * Updates product availability (In Stock / Sold Out), price, description, popular badge
+ * Broadcasts instant updates to connected clients via SSE & Supabase Realtime
+ */
+app.patch("/api/admin/products/:id", async (req, res) => {
+  const { id } = req.params;
+  const updates = req.body || {};
+
+  const product = productsStore.get(id);
+  if (!product) {
+    return res.status(404).json({ error: "Product not found" });
+  }
+
+  // Apply updates
+  if (typeof updates.isAvailable === "boolean") {
+    product.isAvailable = updates.isAvailable;
+  }
+  if (typeof updates.price === "number" && !isNaN(updates.price) && updates.price >= 0) {
+    product.price = updates.price;
+  }
+  if (typeof updates.description === "string") {
+    product.description = updates.description.trim();
+  }
+  if (typeof updates.popular === "boolean") {
+    product.popular = updates.popular;
+  }
+  if (typeof updates.name === "string" && updates.name.trim()) {
+    product.name = updates.name.trim();
+  }
+
+  productsStore.set(id, product);
+
+  // Sync to Supabase table using Service Role key (RLS bypass on authenticated server)
+  try {
+    const supabaseAdmin = getSupabaseAdminClient();
+    if (supabaseAdmin) {
+      await supabaseAdmin
+        .from("products")
+        .update({
+          is_available: product.isAvailable,
+          price: product.price,
+          description: product.description,
+          popular: product.popular,
+          name: product.name,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+    }
+  } catch (err) {
+    console.warn("Supabase admin write warning:", err);
+  }
+
+  // Broadcast realtime update to kitchen KDS, POS, and public customer storefront
+  broadcastProductRealtime("product_updated", product);
+
+  return res.json({
+    success: true,
+    product,
+    message: `Updated ${product.name} (${product.isAvailable ? "In Stock" : "86'd / Sold Out"})`,
+  });
+});
+
 
 // 4. Checkout API (PayMongo Dynamic QR Ph / Cash at Counter)
 app.post("/api/checkout", async (req, res) => {

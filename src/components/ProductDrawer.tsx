@@ -509,13 +509,23 @@ export const ProductDrawer: React.FC<ProductDrawerProps> = ({
           </div>
 
           {/* Full-Width Solid Green Button */}
-          <button
-            type="button"
-            onClick={handleAdd}
-            className="w-full h-12 rounded-full bg-[#00A86B] hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-sm sm:text-base flex items-center justify-center shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-          >
-            <span>Add to Basket - {formatPrice(totalPrice)}</span>
-          </button>
+          {product.isAvailable === false ? (
+            <button
+              type="button"
+              disabled
+              className="w-full h-12 rounded-full bg-stone-200 text-stone-500 font-bold text-sm sm:text-base flex items-center justify-center cursor-not-allowed shadow-none"
+            >
+              <span>Currently Sold Out (86'd)</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleAdd}
+              className="w-full h-12 rounded-full bg-[#00A86B] hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-sm sm:text-base flex items-center justify-center shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+            >
+              <span>Add to Basket - {formatPrice(totalPrice)}</span>
+            </button>
+          )}
         </div>
 
       </div>

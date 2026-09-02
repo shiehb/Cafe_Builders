@@ -14,29 +14,46 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onSelectProduct,
   onQuickAdd,
 }) => {
+  const isSoldOut = product.isAvailable === false;
+
   return (
     <div
       onClick={() => onSelectProduct(product)}
-      className="group relative flex flex-col bg-white rounded-2xl border border-stone-200/80 shadow-2xs hover:shadow-md hover:border-amber-700/30 transition-all duration-300 overflow-hidden cursor-pointer"
+      className={`group relative flex flex-col bg-white rounded-2xl border transition-all duration-300 overflow-hidden cursor-pointer ${
+        isSoldOut
+          ? "border-stone-200/60 opacity-80"
+          : "border-stone-200/80 shadow-2xs hover:shadow-md hover:border-amber-700/30"
+      }`}
     >
       {/* Product Image Frame */}
       <div className="relative aspect-4/3 w-full bg-stone-100 overflow-hidden">
         <img
           src={product.imageUrl}
           alt={product.name}
-          className="h-full w-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+          className={`h-full w-full object-cover object-center transition-transform duration-500 ${
+            isSoldOut ? "grayscale-[60%] group-hover:scale-100" : "group-hover:scale-105"
+          }`}
           loading="lazy"
         />
 
+        {/* Sold Out Overlay Banner */}
+        {isSoldOut && (
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center">
+            <span className="px-3 py-1 rounded-full bg-rose-600/90 text-white font-black text-xs uppercase tracking-wider shadow-lg">
+              Sold Out
+            </span>
+          </div>
+        )}
+
         {/* Overlay Badges */}
         <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5">
-          {product.popular && (
+          {product.popular && !isSoldOut && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-700 text-white text-[10px] font-bold tracking-wide shadow-xs">
               <Flame className="h-3 w-3" />
               Popular
             </span>
           )}
-          {product.tags && product.tags[0] && !product.popular && (
+          {product.tags && product.tags[0] && !product.popular && !isSoldOut && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-stone-900/80 backdrop-blur-xs text-white text-[10px] font-medium tracking-wide">
               <Sparkles className="h-2.5 w-2.5" />
               {product.tags[0]}
@@ -45,7 +62,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         </div>
 
         {/* Temperature Badges */}
-        {product.temperatureOptions && product.temperatureOptions.length > 0 && (
+        {product.temperatureOptions && product.temperatureOptions.length > 0 && !isSoldOut && (
           <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1 bg-white/90 backdrop-blur-xs px-2 py-0.5 rounded-md border border-stone-200/60 text-[10px] font-semibold text-stone-700 shadow-2xs">
             {product.temperatureOptions.includes("Hot") && (
               <Sun className="h-3 w-3 text-amber-600" />
@@ -62,7 +79,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       <div className="p-4 sm:p-5 flex flex-col flex-1 justify-between">
         <div>
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-bold text-base text-stone-900 group-hover:text-amber-800 transition-colors leading-snug">
+            <h3 className={`font-bold text-base transition-colors leading-snug ${
+              isSoldOut ? "text-stone-500" : "text-stone-900 group-hover:text-amber-800"
+            }`}>
               {product.name}
             </h3>
           </div>
@@ -77,26 +96,35 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             <span className="text-[10px] font-medium uppercase tracking-wider text-stone-400 block">
               Price
             </span>
-            <span className="text-base sm:text-lg font-extrabold text-stone-900 tracking-tight font-display">
+            <span className={`text-base sm:text-lg font-extrabold tracking-tight font-display ${
+              isSoldOut ? "text-stone-400 line-through" : "text-stone-900"
+            }`}>
               {formatPHP(product.price)}
             </span>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (product.temperatureOptions || product.milkOptionsAvailable) {
-                  onSelectProduct(product);
-                } else {
-                  onQuickAdd(product);
-                }
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-900 text-white text-xs font-semibold hover:bg-amber-800 active:scale-95 transition-all shadow-xs cursor-pointer"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              <span>{product.temperatureOptions ? "Customize" : "Add"}</span>
-            </button>
+            {isSoldOut ? (
+              <span className="inline-flex items-center px-2.5 py-1 rounded-xl bg-stone-100 text-stone-400 text-xs font-bold">
+                Sold Out
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (product.temperatureOptions || product.milkOptionsAvailable) {
+                    onSelectProduct(product);
+                  } else {
+                    onQuickAdd(product);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-900 text-white text-xs font-semibold hover:bg-amber-800 active:scale-95 transition-all shadow-xs cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>{product.temperatureOptions ? "Customize" : "Add"}</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
