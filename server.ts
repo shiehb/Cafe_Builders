@@ -7,11 +7,17 @@ import { createPayMongoQRPhPayment } from "./src/lib/paymongo";
 import { Order, OrderStatus, CheckoutPayload } from "./src/types";
 import { CATEGORIES, PRODUCTS } from "./src/data/menuData";
 import { broadcastKitchenOrder } from "./src/lib/supabase";
+import { getPrismaClient, seedDatabaseIfEmpty } from "./src/lib/prisma";
 
 dotenv.config();
 
 const app = express();
 const PORT = 3000;
+
+// Initialize & seed database if empty
+seedDatabaseIfEmpty().catch((err) => {
+  console.warn("Prisma startup seeding skipped:", (err as Error)?.message || err);
+});
 
 // Capture raw body for webhook signature verification
 app.use(
@@ -116,7 +122,7 @@ app.post("/api/checkout", async (req, res) => {
     const { items, customerName, orderType = "DINE_IN", paymentMethod, notes } = body;
 
     if (!items || items.length === 0) {
-      return res.status(400).json({ success: false, error: "Cart is empty. Please add items." });
+      return res.status(400).json({ error: "Cart is empty. Please add items before checking out." });
     }
 
     const subtotal = items.reduce((sum, it) => sum + (it.subtotal || it.unitPrice * it.quantity), 0);
@@ -173,6 +179,42 @@ app.post("/api/checkout", async (req, res) => {
 
     ordersStore.set(orderId, newOrder);
 
+    // Persist to Prisma database if configured
+    const prisma = getPrismaClient();
+    if (prisma) {
+      try {
+        await prisma.order.create({
+          data: {
+            id: orderId,
+            orderNumber,
+            status: "PENDING_PAYMENT",
+            paymentMethod,
+            paymentIntentId,
+            paymentMethodId,
+            qrCodeUrl,
+            customerName: newOrder.customerName,
+            orderType,
+            notes,
+            subtotal,
+            serviceFee,
+            totalAmount,
+            items: {
+              create: items.map((it) => ({
+                productName: it.productName,
+                unitPrice: it.unitPrice,
+                quantity: it.quantity,
+                subtotal: it.subtotal,
+                customizations: it.customizations ? JSON.parse(JSON.stringify(it.customizations)) : undefined,
+                notes: it.notes,
+              })),
+            },
+          },
+        });
+      } catch (dbErr) {
+        console.warn("⚠️ Prisma order persistence warning (using active store):", (dbErr as Error)?.message || dbErr);
+      }
+    }
+
     // Broadcast new order to Kitchen Display System (KDS)
     broadcastRealtime("order_created", newOrder);
 
@@ -190,8 +232,7 @@ app.post("/api/checkout", async (req, res) => {
   } catch (error: any) {
     console.error("Error in /api/checkout:", error);
     return res.status(500).json({
-      success: false,
-      error: error.message || "Internal server error during checkout",
+      error: error?.message || "Internal server error during checkout",
     });
   }
 });

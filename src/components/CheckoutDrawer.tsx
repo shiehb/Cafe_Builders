@@ -207,9 +207,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({
               <span>
                 {typeof errorMessage === "string"
                   ? errorMessage
-                  : (errorMessage as any)?.message ||
-                    (errorMessage as any)?.error ||
-                    "Failed to process checkout. Please try again."}
+                  : (errorMessage as any)?.message || JSON.stringify(errorMessage)}
               </span>
             </div>
           )}

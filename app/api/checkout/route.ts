@@ -7,27 +7,33 @@
 
 import { createPayMongoQRPhPayment } from "@/src/lib/paymongo";
 import { CheckoutPayload, Order } from "@/src/types";
-
-// In a Next.js production environment with Prisma Client:
-// import { PrismaClient } from "@prisma/client";
-// const prisma = new PrismaClient();
+import { getPrismaClient } from "@/src/lib/prisma";
 
 let orderCounter = 1;
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as CheckoutPayload;
+    let body: CheckoutPayload;
+    try {
+      body = (await request.json()) as CheckoutPayload;
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON payload provided" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     const { items, customerName, orderType = "DINE_IN", paymentMethod, notes } = body;
 
     if (!items || items.length === 0) {
-      return new Response(JSON.stringify({ success: false, error: "No items provided in cart" }), {
+      return new Response(JSON.stringify({ error: "Cart is empty. Please add items before checking out." }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });
     }
 
     // Calculate subtotal
-    const subtotal = items.reduce((acc, item) => acc + item.subtotal, 0);
+    const subtotal = items.reduce((acc, item) => acc + (item.subtotal || item.unitPrice * item.quantity), 0);
     const serviceFee = 0; // Configurable cafe service charge
     const totalAmount = subtotal + serviceFee;
 
@@ -54,8 +60,9 @@ export async function POST(request: Request) {
 
     // Prepare order model object (Prisma schema mapped)
     const now = new Date().toISOString();
+    const orderId = `ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const newOrder: Order = {
-      id: `ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      id: orderId,
       orderNumber,
       status: "PENDING_PAYMENT",
       paymentMethod,
@@ -83,6 +90,42 @@ export async function POST(request: Request) {
       estimatedReadyTime: "8 - 12 mins",
     };
 
+    // Persist to Prisma PostgreSQL database if configured
+    const prisma = getPrismaClient();
+    if (prisma) {
+      try {
+        await prisma.order.create({
+          data: {
+            id: orderId,
+            orderNumber,
+            status: "PENDING_PAYMENT",
+            paymentMethod,
+            paymentIntentId,
+            paymentMethodId,
+            qrCodeUrl,
+            customerName: newOrder.customerName,
+            orderType,
+            notes,
+            subtotal,
+            serviceFee,
+            totalAmount,
+            items: {
+              create: items.map((it) => ({
+                productName: it.productName,
+                unitPrice: it.unitPrice,
+                quantity: it.quantity,
+                subtotal: it.subtotal,
+                customizations: it.customizations ? JSON.parse(JSON.stringify(it.customizations)) : undefined,
+                notes: it.notes,
+              })),
+            },
+          },
+        });
+      } catch (dbError) {
+        console.warn("⚠️ Prisma DB write warning:", (dbError as Error)?.message || dbError);
+      }
+    }
+
     // Return response with order and QR code if QRPH
     return new Response(
       JSON.stringify({
@@ -105,8 +148,7 @@ export async function POST(request: Request) {
     console.error("Checkout API error:", error);
     return new Response(
       JSON.stringify({
-        success: false,
-        error: error.message || "Failed to process checkout",
+        error: error?.message || "Failed to process checkout. Please try again.",
       }),
       {
         status: 500,
