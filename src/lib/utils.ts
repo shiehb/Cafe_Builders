@@ -6,11 +6,13 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatPrice(amount: number): string {
-  return `$${amount.toFixed(2)}`;
+  const safeAmount = isNaN(amount) ? 0 : amount;
+  return `₱${safeAmount.toFixed(2)}`;
 }
 
 export function formatPHP(amount: number): string {
-  return `$${amount.toFixed(2)}`;
+  const safeAmount = isNaN(amount) ? 0 : amount;
+  return `₱${safeAmount.toFixed(2)}`;
 }
 
 export function formatDateTime(dateInput: string | Date | number): string {

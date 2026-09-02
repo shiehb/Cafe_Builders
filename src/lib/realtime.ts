@@ -173,6 +173,8 @@ export function useOrderTrackingRealtime(
   }, [orderId, onOrderUpdated]);
 }
 
+export const useOrderRealtime = useOrderTrackingRealtime;
+
 /**
  * Dispatches an instant local window event to synchronize all active drawer components
  */

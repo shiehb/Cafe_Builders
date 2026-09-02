@@ -50,6 +50,71 @@ export function usePath(): string {
   return currentPath;
 }
 
+export type RouteInfo =
+  | { type: "home" }
+  | { type: "item"; id: string }
+  | { type: "cart" }
+  | { type: "checkout" }
+  | { type: "order"; id: string }
+  | { type: "kds" }
+  | { type: "pos" }
+  | { type: "admin" }
+  | { type: "admin_product_new" }
+  | { type: "admin_product_edit"; id: string }
+  | { type: "unknown"; path: string };
+
+export function parseRoute(pathname: string): RouteInfo {
+  const clean = (pathname || "/").split("?")[0].replace(/\/+$/, "") || "/";
+  const lower = clean.toLowerCase();
+
+  if (lower === "" || lower === "/") {
+    return { type: "home" };
+  }
+  if (lower === "/cart") {
+    return { type: "cart" };
+  }
+  if (lower === "/checkout") {
+    return { type: "checkout" };
+  }
+  if (lower === "/kds") {
+    return { type: "kds" };
+  }
+  if (lower === "/pos") {
+    return { type: "pos" };
+  }
+  if (lower === "/admin") {
+    return { type: "admin" };
+  }
+  if (lower === "/admin/products/new") {
+    return { type: "admin_product_new" };
+  }
+
+  // /admin/products/:id/edit
+  const adminEditMatch = clean.match(/^\/admin\/products\/([^/]+)\/edit$/i);
+  if (adminEditMatch) {
+    return { type: "admin_product_edit", id: adminEditMatch[1] };
+  }
+
+  // /item/:id
+  const itemMatch = clean.match(/^\/item\/([^/]+)$/i);
+  if (itemMatch) {
+    return { type: "item", id: itemMatch[1] };
+  }
+
+  // /order/:id
+  const orderMatch = clean.match(/^\/order\/([^/]+)$/i);
+  if (orderMatch) {
+    return { type: "order", id: orderMatch[1] };
+  }
+
+  return { type: "unknown", path: clean };
+}
+
+export function useParsedRoute(): RouteInfo {
+  const path = usePath();
+  return parseRoute(path);
+}
+
 /**
  * Returns URL query parameter by key
  */

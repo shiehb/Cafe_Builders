@@ -39,6 +39,9 @@ import {
   emitLocalProductEvent,
 } from "../lib/realtime";
 import { logoutAdminSession } from "../lib/auth";
+import { navigate } from "../lib/router";
+import { ConfirmDialog } from "../components/ui/ConfirmDialog";
+import { Plus } from "lucide-react";
 
 export function AdminPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -56,6 +59,7 @@ export function AdminPage() {
   const [stockFilter, setStockFilter] = useState<"ALL" | "IN_STOCK" | "SOLD_OUT">("ALL");
 
   // Price & Details Editor Modal State
+  const [productToToggle, setProductToToggle] = useState<{ product: Product; nextAvailable: boolean } | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editForm, setEditForm] = useState<{
     name: string;
@@ -624,14 +628,24 @@ export function AdminPage() {
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={fetchProducts}
-                    className="px-3 py-1.5 rounded-xl bg-stone-950 hover:bg-stone-800 text-stone-300 text-xs font-semibold border border-stone-800 flex items-center gap-2 transition-all cursor-pointer self-start sm:self-auto"
-                  >
-                    <RefreshCw className="h-3.5 w-3.5 text-[#00A86B]" />
-                    <span>Sync Inventory</span>
-                  </button>
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => navigate("/admin/products/new")}
+                      className="px-3.5 py-1.5 rounded-xl bg-[#00A86B] hover:bg-emerald-600 text-black text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>Add Product</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={fetchProducts}
+                      className="px-3 py-1.5 rounded-xl bg-stone-950 hover:bg-stone-800 text-stone-300 text-xs font-semibold border border-stone-800 flex items-center gap-2 transition-all cursor-pointer"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5 text-[#00A86B]" />
+                      <span>Sync</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Real-time Inventory Metrics */}
@@ -848,7 +862,12 @@ export function AdminPage() {
                               role="switch"
                               aria-checked={item.isAvailable}
                               disabled={isUpdatingProduct === item.id}
-                              onClick={() => toggleProductAvailability(item)}
+                              onClick={() =>
+                                setProductToToggle({
+                                  product: item,
+                                  nextAvailable: !item.isAvailable,
+                                })
+                              }
                               className={cn(
                                 "flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border",
                                 item.isAvailable
@@ -882,7 +901,7 @@ export function AdminPage() {
                             {/* Edit Price & Details Button */}
                             <button
                               type="button"
-                              onClick={() => openEditModal(item)}
+                              onClick={() => navigate(`/admin/products/${item.id}/edit`)}
                               className="px-2.5 py-1.5 rounded-xl bg-stone-950 hover:bg-stone-800 text-stone-300 text-xs font-semibold border border-stone-800 flex items-center gap-1.5 transition-all cursor-pointer"
                               title="Edit item price & details"
                             >
@@ -1165,6 +1184,25 @@ export function AdminPage() {
           </div>
         </div>
       )}
+
+      {/* STOCK TOGGLE CONFIRMATION DIALOG */}
+      <ConfirmDialog
+        isOpen={Boolean(productToToggle)}
+        title={productToToggle?.nextAvailable ? "Mark Item as In Stock?" : "Mark Item as 86'd (Sold Out)?"}
+        message={`Confirm changing "${productToToggle?.product.name}" to ${
+          productToToggle?.nextAvailable ? "In Stock (customers can order)" : "86'd (Sold Out on customer menu)"
+        }?`}
+        confirmLabel={productToToggle?.nextAvailable ? "Mark In Stock" : "Mark Sold Out"}
+        variant={productToToggle?.nextAvailable ? "primary" : "warning"}
+        isLoading={isUpdatingProduct !== null}
+        onConfirm={() => {
+          if (productToToggle) {
+            toggleProductAvailability(productToToggle.product);
+            setProductToToggle(null);
+          }
+        }}
+        onCancel={() => setProductToToggle(null)}
+      />
 
       {/* FLOATING TOAST NOTIFICATION */}
       {toastMessage && (

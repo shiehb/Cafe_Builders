@@ -26,6 +26,7 @@ import {
 import { playOrderChime } from "../lib/audio";
 import { emitLocalOrderEvent } from "../lib/realtime";
 import { Badge } from "../components/ui/Badge";
+import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 
 export function PosPage() {
   const [categories] = useState<Category[]>(CATEGORIES);
@@ -43,6 +44,8 @@ export function PosPage() {
 
   // Process states
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isConfirmChargeOpen, setIsConfirmChargeOpen] = useState<boolean>(false);
+  const [isConfirmClearTicketOpen, setIsConfirmClearTicketOpen] = useState<boolean>(false);
   const [lastChargedOrder, setLastChargedOrder] = useState<Order | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -154,7 +157,7 @@ export function PosPage() {
   }, []);
 
   // Submit and Charge Order
-  const handleChargeOrder = async () => {
+  const handleChargeOrder = () => {
     if (ticketItems.length === 0) {
       setErrorMessage("Please select at least one item.");
       return;
@@ -165,6 +168,11 @@ export function PosPage() {
       return;
     }
 
+    setErrorMessage(null);
+    setIsConfirmChargeOpen(true);
+  };
+
+  const executeChargeOrder = async () => {
     setIsSubmitting(true);
     setErrorMessage(null);
 
@@ -223,6 +231,7 @@ export function PosPage() {
       setErrorMessage(err?.message || "Failed to process POS checkout");
     } finally {
       setIsSubmitting(false);
+      setIsConfirmChargeOpen(false);
     }
   };
 
@@ -374,10 +383,12 @@ export function PosPage() {
                 {ticketItems.length > 0 && (
                   <button
                     type="button"
-                    onClick={clearTicket}
-                    className="text-[11px] text-rose-400 hover:text-rose-300 font-semibold cursor-pointer"
+                    onClick={() => setIsConfirmClearTicketOpen(true)}
+                    title="Clear Register Ticket"
+                    aria-label="Clear Register Ticket"
+                    className="p-1 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 transition-colors cursor-pointer"
                   >
-                    Clear All
+                    <Trash2 className="h-4 w-4" />
                   </button>
                 )}
               </div>
@@ -392,7 +403,7 @@ export function PosPage() {
                     type="text"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="Guest / Table #"
+                    placeholder="Guest / Order #"
                     className="w-full px-2.5 py-1.5 rounded-xl bg-stone-950 border border-stone-800 text-stone-100 text-xs focus:outline-none focus:border-[#00A86B]"
                   />
                 </div>
@@ -728,6 +739,39 @@ export function PosPage() {
             </div>
           </div>
         )}
+        {/* CONFIRM CLEAR TICKET DIALOG */}
+        <ConfirmDialog
+          isOpen={isConfirmClearTicketOpen}
+          title="Clear Register Ticket?"
+          message="Are you sure you want to remove all items from this customer's register ticket?"
+          confirmLabel="Clear Ticket"
+          variant="danger"
+          onConfirm={() => {
+            clearTicket();
+            setIsConfirmClearTicketOpen(false);
+          }}
+          onCancel={() => setIsConfirmClearTicketOpen(false)}
+        />
+
+        {/* CONFIRM CHARGE ORDER DIALOG */}
+        <ConfirmDialog
+          isOpen={isConfirmChargeOpen}
+          title={paymentMethod === "CASH" ? "Confirm Cash Collection?" : "Confirm Order Charge?"}
+          message={
+            paymentMethod === "CASH"
+              ? `Confirm cash collection for ${customerName}: Order Total ${formatPrice(ticketSubtotal)}${
+                  cashTendered > 0
+                    ? `, Tendered ${formatPrice(cashTendered)}, Change Due ${formatPrice(changeDue)}`
+                    : ""
+                }. Send order directly to kitchen?`
+              : `Confirm sending order for ${customerName} totaling ${formatPrice(ticketSubtotal)} via QR Ph?`
+          }
+          confirmLabel={isSubmitting ? "Processing..." : "Confirm & Send to Kitchen"}
+          variant="primary"
+          isLoading={isSubmitting}
+          onConfirm={executeChargeOrder}
+          onCancel={() => setIsConfirmChargeOpen(false)}
+        />
       </StaffLayout>
     </StaffGuard>
   );

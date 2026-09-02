@@ -1,165 +1,80 @@
-import React, { useState, useEffect, useCallback } from "react";
-import confetti from "canvas-confetti";
-import {
-  Category,
-  Product,
-  CartItem,
-  Order,
-  OrderType,
-  ItemCustomization,
-} from "./types";
+import React, { useState, useEffect } from "react";
+import { Category, Product, ItemCustomization } from "./types";
 import { CATEGORIES, PRODUCTS } from "./data/menuData";
 import { Navbar } from "./components/Navbar";
 import { CategoryNav } from "./components/CategoryNav";
 import { MostPopularCarousel } from "./components/MostPopularCarousel";
 import { SpecialtySection } from "./components/SpecialtySection";
-import { ProductDrawer } from "./components/ProductDrawer";
-import { CartDrawer } from "./components/CartDrawer";
-import { CheckoutDrawer } from "./components/CheckoutDrawer";
-import { OrderReceiptDrawer } from "./components/OrderReceiptDrawer";
-import { OrderHistoryDrawer } from "./components/OrderHistoryDrawer";
-import { KitchenKdsDrawer } from "./components/KitchenKdsDrawer";
-import { ViewAllDrawer } from "./components/ViewAllDrawer";
 import { Search, X, ShoppingBag, ArrowRight } from "lucide-react";
 import { formatPrice } from "./lib/utils";
-import { useKitchenRealtime, useProductInventoryRealtime } from "./lib/realtime";
-import { usePath } from "./lib/router";
+import { useProductInventoryRealtime } from "./lib/realtime";
+import { useParsedRoute, navigate } from "./lib/router";
+import { CartProvider, useCart } from "./context/CartContext";
+
+// Standalone Full Pages
 import { KdsPage } from "./pages/KdsPage";
 import { PosPage } from "./pages/PosPage";
 import { AdminPage } from "./pages/AdminPage";
-
-const LOCAL_STORAGE_ORDERS_KEY = "cafe_orders_history";
+import { AdminProductNewPage } from "./pages/AdminProductNewPage";
+import { AdminProductEditPage } from "./pages/AdminProductEditPage";
+import { ItemCustomizationPage } from "./pages/ItemCustomizationPage";
+import { CartPage } from "./pages/CartPage";
+import { CheckoutPage } from "./pages/CheckoutPage";
+import { OrderReceiptPage } from "./pages/OrderReceiptPage";
 
 export default function App() {
-  const currentPath = usePath();
+  return (
+    <CartProvider>
+      <AppRouter />
+    </CartProvider>
+  );
+}
 
-  // ROUTE 1: Staff Kitchen Board (/kds)
-  if (currentPath === "/kds") {
-    return <KdsPage />;
+function AppRouter() {
+  const route = useParsedRoute();
+
+  switch (route.type) {
+    case "kds":
+      return <KdsPage />;
+    case "pos":
+      return <PosPage />;
+    case "admin":
+      return <AdminPage />;
+    case "admin_product_new":
+      return <AdminProductNewPage />;
+    case "admin_product_edit":
+      return <AdminProductEditPage productId={route.id} />;
+    case "item":
+      return <ItemCustomizationPage productId={route.id} />;
+    case "cart":
+      return <CartPage />;
+    case "checkout":
+      return <CheckoutPage />;
+    case "order":
+      return <OrderReceiptPage orderIdOrNumber={route.id} />;
+    case "home":
+    default:
+      return <CustomerApp />;
   }
-
-  // ROUTE 2: Staff Cashier POS (/pos)
-  if (currentPath === "/pos") {
-    return <PosPage />;
-  }
-
-  // ROUTE 3: Store Manager Admin (/admin)
-  if (currentPath === "/admin") {
-    return <AdminPage />;
-  }
-
-  // ROUTE 4: Public Customer App (/)
-  return <CustomerApp />;
 }
 
 function CustomerApp() {
-  // Menu Data State
+  const { cartItemCount, cartTotal, orderType, addToCart, savedOrders, showToast } = useCart();
   const [categories, setCategories] = useState<Category[]>(CATEGORIES);
   const [products, setProducts] = useState<Product[]>(PRODUCTS);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
-
-  // Dining Type (Dine-in / Takeaway)
-  const [orderType, setOrderType] = useState<OrderType>("DINE_IN");
-
-  // Cart State
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
-
-  // Selected Product for Customization Drawer
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-
-  // Layout View Mode (2-column Grid vs 1-column List)
   const [isGridView, setIsGridView] = useState<boolean>(false);
 
-  // Drawers State
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState<boolean>(false);
-  const [isReceiptOpen, setIsReceiptOpen] = useState<boolean>(false);
-  const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
-  const [isKdsOpen, setIsKdsOpen] = useState<boolean>(false);
-
-  // Dedicated "View All" / "Full View" 2-Column Grid Drawer State
-  const [viewAllDrawerState, setViewAllDrawerState] = useState<{
-    isOpen: boolean;
-    title: string;
-    subtitle?: string;
-    products: Product[];
-  }>({
-    isOpen: false,
-    title: "",
-    products: [],
-  });
-
-  // Active Viewing Order (for Receipt Drawer)
-  const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
-
-  // Saved Orders from LocalStorage
-  const [savedOrders, setSavedOrders] = useState<Order[]>(() => {
-    try {
-      const stored = localStorage.getItem(LOCAL_STORAGE_ORDERS_KEY);
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  // Persist saved orders to LocalStorage
-  const persistOrders = useCallback((orders: Order[]) => {
-    setSavedOrders(orders);
-    try {
-      localStorage.setItem(LOCAL_STORAGE_ORDERS_KEY, JSON.stringify(orders));
-    } catch (e) {
-      console.error("Failed to write to localStorage", e);
-    }
-  }, []);
-
-  // When order status is updated in Receipt or KDS or via Webhook
-  const handleOrderUpdated = useCallback(
-    (updatedOrder: Order) => {
-      setSavedOrders((prev) => {
-        const nextList = prev.map((o) =>
-          o.id === updatedOrder.id || o.orderNumber === updatedOrder.orderNumber
-            ? updatedOrder
-            : o
-        );
-        try {
-          localStorage.setItem(LOCAL_STORAGE_ORDERS_KEY, JSON.stringify(nextList));
-        } catch {}
-        return nextList;
-      });
-
-      setViewingOrder((prev) =>
-        prev && (prev.id === updatedOrder.id || prev.orderNumber === updatedOrder.orderNumber)
-          ? updatedOrder
-          : prev
-      );
-    },
-    []
-  );
-
-  // Global Realtime listener for all incoming orders and status updates
-  useKitchenRealtime(
-    useCallback(
-      ({ order }) => {
-        if (order) {
-          handleOrderUpdated(order);
-        }
-      },
-      [handleOrderUpdated]
-    )
-  );
-
   // Global Realtime listener for live product inventory & availability updates
-  useProductInventoryRealtime(
-    useCallback((updatedProduct: Product) => {
-      if (!updatedProduct || !updatedProduct.id) return;
-      setProducts((prev) =>
-        prev.map((p) => (p.id === updatedProduct.id ? { ...p, ...updatedProduct } : p))
-      );
-    }, [])
-  );
+  useProductInventoryRealtime((updatedProduct: Product) => {
+    if (!updatedProduct || !updatedProduct.id) return;
+    setProducts((prev) =>
+      prev.map((p) => (p.id === updatedProduct.id ? { ...p, ...updatedProduct } : p))
+    );
+  });
 
-  // Fetch live products & categories from server API if available
+  // Fetch live products & categories from server API
   useEffect(() => {
     async function loadData() {
       try {
@@ -182,11 +97,6 @@ function CustomerApp() {
     loadData();
   }, []);
 
-  // Cart calculations
-  const cartTotal = cart.reduce((sum, item) => sum + item.lineTotal, 0);
-  const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-
-  // Dynamic greeting based on time of day
   const getGreeting = () => {
     const currentHour = new Date().getHours();
     if (currentHour < 12) return "Good morning, Coffee Lover ☕";
@@ -194,7 +104,6 @@ function CustomerApp() {
     return "Good evening, Coffee Lover ☕";
   };
 
-  // Filter products by category and search
   const filteredProducts = products.filter((item) => {
     const matchesCategory =
       selectedCategory === "all" ||
@@ -210,131 +119,19 @@ function CustomerApp() {
     return matchesCategory && matchesSearch;
   });
 
-  // Quick Add Item to Cart
   const handleQuickAdd = (product: Product) => {
+    if (!product.isAvailable) {
+      showToast(`${product.name} is currently sold out.`, "error");
+      return;
+    }
     const defaultCustomization: ItemCustomization = {
       iceLevel: product.temperatureOptions?.includes("Iced") ? "Less Ice" : undefined,
       sweetness: product.sweetnessAdjustable ? "Regular Sweetness" : undefined,
     };
-    handleAddToCart(product, 1, defaultCustomization, 0);
+    addToCart(product, 1, defaultCustomization, 0);
   };
 
-  // Add Item to Cart with Customizations
-  const handleAddToCart = (
-    product: Product,
-    quantity: number,
-    customizations: ItemCustomization,
-    customizationsExtraPrice: number
-  ) => {
-    const unitPrice = product.price + customizationsExtraPrice;
-    const lineTotal = unitPrice * quantity;
-
-    // Generate hash ID for unique combination of product + customizations
-    const customKey = `${product.id}-${customizations.iceLevel || ""}-${
-      customizations.sweetness || ""
-    }-${customizations.milkOption || ""}-${customizations.addOns?.join(",") || ""}-${
-      customizations.specialInstructions || ""
-    }`;
-
-    setCart((prev) => {
-      const existingIdx = prev.findIndex((item) => item.id === customKey);
-      if (existingIdx > -1) {
-        const updated = [...prev];
-        const newQty = updated[existingIdx].quantity + quantity;
-        updated[existingIdx] = {
-          ...updated[existingIdx],
-          quantity: newQty,
-          lineTotal: updated[existingIdx].unitPrice * newQty,
-        };
-        return updated;
-      }
-
-      const newItem: CartItem = {
-        id: customKey,
-        productId: product.id,
-        product,
-        quantity,
-        unitPrice,
-        customizations,
-        customizationsTotal: customizationsExtraPrice,
-        lineTotal,
-      };
-      return [...prev, newItem];
-    });
-
-    // Open Cart Drawer
-    setIsCartOpen(true);
-  };
-
-  // Update Cart Item Quantity
-  const handleUpdateQuantity = (cartItemId: string, newQty: number) => {
-    if (newQty <= 0) {
-      handleRemoveFromCart(cartItemId);
-      return;
-    }
-    setCart((prev) =>
-      prev.map((item) =>
-        item.id === cartItemId
-          ? {
-              ...item,
-              quantity: newQty,
-              lineTotal: item.unitPrice * newQty,
-            }
-          : item
-      )
-    );
-  };
-
-  // Remove Item from Cart
-  const handleRemoveFromCart = (cartItemId: string) => {
-    setCart((prev) => prev.filter((item) => item.id !== cartItemId));
-  };
-
-  // Clear Cart
-  const handleClearCart = () => {
-    setCart([]);
-  };
-
-  // Checkout Completion Handler
-  const handleOrderCompleted = (order: Order) => {
-    // 1. Trigger celebratory confetti
-    try {
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ["#00A86B", "#10b981", "#059669", "#d97706"],
-      });
-    } catch {
-      // safe fallback
-    }
-
-    // 2. Clear active cart
-    setCart([]);
-    setIsCartOpen(false);
-
-    // 3. Save order to LocalStorage list
-    const updatedOrders = [
-      order,
-      ...savedOrders.filter((o) => o.id !== order.id && o.orderNumber !== order.orderNumber),
-    ];
-    persistOrders(updatedOrders);
-
-    // 4. Open receipt drawer
-    setViewingOrder(order);
-    setIsReceiptOpen(true);
-  };
-
-  // Clear LocalStorage History
-  const handleClearHistory = () => {
-    if (confirm("Are you sure you want to clear your local receipt history from this device?")) {
-      persistOrders([]);
-    }
-  };
-
-  // Most recent active order
   const activeOrder = savedOrders.find((o) => o.status !== "COMPLETED");
-
   const currentCategoryObj = categories.find((c) => c.id === selectedCategory);
   const sectionTitle =
     selectedCategory === "all"
@@ -342,23 +139,25 @@ function CustomerApp() {
       : currentCategoryObj?.name || "Artisan Specialties";
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] text-stone-900 flex flex-col font-sans pb-24">
+    <div className="min-h-screen bg-[#F8F9FA] text-stone-900 flex flex-col font-sans pb-28">
       {/* Top Navbar */}
       <Navbar
-        onOpenCart={() => setIsCartOpen(true)}
-        onOpenReceipts={() => setIsHistoryOpen(true)}
-        onOpenKds={() => setIsKdsOpen(true)}
+        onOpenCart={() => navigate("/cart")}
+        onOpenReceipts={() => {
+          if (savedOrders.length > 0) {
+            navigate(`/order/${savedOrders[0].id}`);
+          } else {
+            showToast("No active or previous orders found on this device.", "info");
+          }
+        }}
+        onOpenKds={() => navigate("/kds")}
         cartCount={cartItemCount}
         cartTotal={cartTotal}
         activeOrder={activeOrder}
-        onSelectActiveOrder={(order) => {
-          setViewingOrder(order);
-          setIsReceiptOpen(true);
-        }}
+        onSelectActiveOrder={(order) => navigate(`/order/${order.id}`)}
       />
 
       <main className="max-w-3xl w-full mx-auto px-0 sm:px-4 py-4 space-y-5">
-        
         {/* 1. TOP HEADER GREETING */}
         <section className="px-4 sm:px-0">
           <div className="flex items-start justify-between gap-3">
@@ -379,9 +178,8 @@ function CustomerApp() {
           </div>
         </section>
 
-        {/* 2. STICKY / MAGNET SEARCH & CATEGORY BAR */}
+        {/* 2. STICKY SEARCH & CATEGORY BAR */}
         <div className="sticky top-14 z-30 bg-[#F8F9FA]/95 sm:bg-white/90 backdrop-blur-md pt-2 pb-3 px-4 sm:px-0 space-y-2.5 border-b border-stone-200/70 shadow-2xs -mx-0 sm:-mx-0 transition-all">
-          {/* Full-Width Clean White Input Search Bar */}
           <div className="relative w-full">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
             <input
@@ -403,7 +201,7 @@ function CustomerApp() {
             )}
           </div>
 
-          {/* Horizontal Scrolling Pill Buttons with Icons */}
+          {/* Category Pills */}
           <CategoryNav
             categories={categories}
             selectedCategoryId={selectedCategory}
@@ -414,52 +212,39 @@ function CustomerApp() {
           />
         </div>
 
-        {/* 3. "MOST POPULAR" HORIZONTAL CAROUSEL */}
+        {/* 3. MOST POPULAR CAROUSEL */}
         {selectedCategory === "all" && !searchQuery && (
           <MostPopularCarousel
             products={products}
-            onSelectProduct={(p) => setSelectedProduct(p)}
+            onSelectProduct={(p) => navigate(`/item/${p.id}`)}
             onQuickAdd={handleQuickAdd}
             onViewAll={() => {
-              const popularItems = products.filter((p) => p.popular || p.topPick);
-              setViewAllDrawerState({
-                isOpen: true,
-                title: "Most Popular",
-                subtitle: "Top rated and best-selling barista favorites",
-                products: popularItems.length > 0 ? popularItems : products.slice(0, 6),
-              });
+              const el = document.getElementById("specialties-section");
+              if (el) el.scrollIntoView({ behavior: "smooth" });
             }}
           />
         )}
 
-        {/* 4. "ALL MENU" / SPECIALTIES LIST & 2-COLUMN GRID VIEW */}
+        {/* 4. ALL MENU SPECIALTIES */}
         <div id="specialties-section" className="pt-1">
           <SpecialtySection
             title={sectionTitle}
             products={filteredProducts}
-            onSelectProduct={(p) => setSelectedProduct(p)}
+            onSelectProduct={(p) => navigate(`/item/${p.id}`)}
             onQuickAdd={handleQuickAdd}
             isGrid={isGridView}
             onToggleViewMode={() => setIsGridView((prev) => !prev)}
-            onFullView={() => {
-              setViewAllDrawerState({
-                isOpen: true,
-                title: sectionTitle,
-                subtitle: `Browse all ${filteredProducts.length} items in full 2-column grid`,
-                products: filteredProducts,
-              });
-            }}
+            onFullView={() => setIsGridView(true)}
           />
         </div>
-
       </main>
 
-      {/* FLOATING QUICK-ACCESS BASKET BAR (Mobile bottom sticky bar when cart has items) */}
-      {cartItemCount > 0 && !isCartOpen && !selectedProduct && !isCheckoutOpen && !isReceiptOpen && !viewAllDrawerState.isOpen && (
+      {/* FLOATING QUICK-ACCESS BASKET BAR (Navigates to /cart) */}
+      {cartItemCount > 0 && (
         <div className="fixed bottom-4 inset-x-0 z-40 px-4 max-w-lg mx-auto animate-in slide-in-from-bottom-3 duration-300">
           <button
             type="button"
-            onClick={() => setIsCartOpen(true)}
+            onClick={() => navigate("/cart")}
             className="w-full h-14 rounded-full bg-[#00A86B] hover:bg-emerald-700 text-white p-3 px-5 flex items-center justify-between shadow-xl shadow-emerald-700/25 active:scale-[0.98] transition-all cursor-pointer"
           >
             <div className="flex items-center gap-2.5">
@@ -485,78 +270,6 @@ function CustomerApp() {
           </button>
         </div>
       )}
-
-      {/* 4. ITEM CUSTOMIZATION BOTTOM SHEET / DRAWER */}
-      <ProductDrawer
-        product={selectedProduct}
-        isOpen={Boolean(selectedProduct)}
-        onClose={() => setSelectedProduct(null)}
-        onAddToCart={handleAddToCart}
-      />
-
-      {/* 5. DEDICATED "VIEW ALL" / "FULL VIEW" 2-COLUMN GRID DRAWER */}
-      <ViewAllDrawer
-        isOpen={viewAllDrawerState.isOpen}
-        onClose={() => setViewAllDrawerState((prev) => ({ ...prev, isOpen: false }))}
-        title={viewAllDrawerState.title}
-        subtitle={viewAllDrawerState.subtitle}
-        products={viewAllDrawerState.products}
-        onSelectProduct={(p) => setSelectedProduct(p)}
-        onQuickAdd={handleQuickAdd}
-      />
-
-      {/* 6. ORDER SUMMARY & CART BOTTOM SHEET */}
-      <CartDrawer
-        isOpen={isCartOpen}
-        onClose={() => setIsCartOpen(false)}
-        items={cart}
-        onUpdateQuantity={handleUpdateQuantity}
-        onRemoveItem={handleRemoveFromCart}
-        onClearCart={handleClearCart}
-        orderType={orderType}
-        onChangeOrderType={setOrderType}
-        onProceedToCheckout={() => {
-          setIsCartOpen(false);
-          setIsCheckoutOpen(true);
-        }}
-      />
-
-      {/* 7. DIRECT CHECKOUT DRAWER */}
-      <CheckoutDrawer
-        isOpen={isCheckoutOpen}
-        onClose={() => setIsCheckoutOpen(false)}
-        cartItems={cart}
-        defaultOrderType={orderType}
-        onOrderCompleted={handleOrderCompleted}
-      />
-
-      {/* 8. DIGITAL RECEIPT & LIVE ORDER STATUS DRAWER */}
-      <OrderReceiptDrawer
-        isOpen={isReceiptOpen}
-        onClose={() => setIsReceiptOpen(false)}
-        order={viewingOrder}
-        onOrderUpdated={handleOrderUpdated}
-        onOrderAgain={() => setIsCartOpen(true)}
-      />
-
-      {/* 9. ORDER HISTORY DRAWER */}
-      <OrderHistoryDrawer
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-        orders={savedOrders}
-        onSelectOrder={(order) => {
-          setViewingOrder(order);
-          setIsReceiptOpen(true);
-        }}
-        onClearHistory={handleClearHistory}
-      />
-
-      {/* 10. KITCHEN KDS STAFF DRAWER */}
-      <KitchenKdsDrawer
-        isOpen={isKdsOpen}
-        onClose={() => setIsKdsOpen(false)}
-        onOrderStatusUpdated={handleOrderUpdated}
-      />
     </div>
   );
 }

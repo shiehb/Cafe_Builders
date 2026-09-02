@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Heart, Zap, ChevronRight } from "lucide-react";
+import { Plus, Heart, Zap } from "lucide-react";
 import { Product } from "../types";
 import { formatPrice } from "../lib/utils";
 
@@ -14,7 +14,6 @@ export const MostPopularCarousel: React.FC<MostPopularCarouselProps> = ({
   products,
   onSelectProduct,
   onQuickAdd,
-  onViewAll,
 }) => {
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
 
@@ -37,15 +36,6 @@ export const MostPopularCarousel: React.FC<MostPopularCarouselProps> = ({
         <h2 className="text-lg sm:text-xl font-extrabold text-stone-900 tracking-tight">
           Most Popular
         </h2>
-        {onViewAll && (
-          <button
-            onClick={onViewAll}
-            className="inline-flex items-center gap-0.5 text-xs sm:text-sm font-bold text-[#00A86B] hover:text-emerald-700 transition-colors cursor-pointer"
-          >
-            <span>View All</span>
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        )}
       </div>
 
       {/* Horizontal Carousel */}

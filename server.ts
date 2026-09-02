@@ -262,6 +262,16 @@ app.get("/api/products", async (req, res) => {
   res.json({ data: list });
 });
 
+// Single Product Public Endpoint
+app.get("/api/products/:id", (req, res) => {
+  const { id } = req.params;
+  const product = productsStore.get(id);
+  if (!product) {
+    return res.status(404).json({ error: "Product not found" });
+  }
+  res.json({ product });
+});
+
 // ==============================================================================
 // PROTECTED ADMIN INVENTORY & PRODUCT MANAGEMENT ENDPOINTS
 // Enforced by expressAdminAuthMiddleware (Valid HttpOnly admin_session required)
@@ -292,6 +302,125 @@ app.get("/api/admin/products", async (_req, res) => {
 
   const list = Array.from(productsStore.values());
   res.json({ data: list });
+});
+
+/**
+ * POST /api/admin/products
+ * Creates a new product in the catalog and broadcasts update
+ */
+app.post("/api/admin/products", async (req, res) => {
+  try {
+    const {
+      name,
+      categoryId,
+      categoryName,
+      price,
+      description = "",
+      imageUrl,
+      popular = false,
+      isAvailable = true,
+      temperatureOptions = ["Hot", "Iced"],
+      sweetnessAdjustable = true,
+      tags = [],
+    } = req.body || {};
+
+    if (!name || typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "Product name is required" });
+    }
+
+    const numericPrice = Number(price);
+    if (isNaN(numericPrice) || numericPrice < 0) {
+      return res.status(400).json({ error: "Valid price in PHP is required" });
+    }
+
+    const newId = `prod_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const matchedCategory = CATEGORIES.find((c) => c.id === categoryId);
+
+    const newProduct: Product = {
+      id: newId,
+      name: name.trim(),
+      categoryId: categoryId || (matchedCategory ? matchedCategory.id : "cat_coffee"),
+      categoryName: categoryName || (matchedCategory ? matchedCategory.name : "Artisan Coffee"),
+      price: numericPrice,
+      description: description?.trim() || "",
+      imageUrl: imageUrl?.trim() || "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=600&auto=format&fit=crop&q=80",
+      popular: Boolean(popular),
+      isAvailable: isAvailable !== false,
+      temperatureOptions: Array.isArray(temperatureOptions) && temperatureOptions.length > 0 ? temperatureOptions : ["Hot", "Iced"],
+      sweetnessAdjustable: sweetnessAdjustable !== false,
+      tags: Array.isArray(tags) ? tags : ["Handcrafted", "Featured"],
+    };
+
+    productsStore.set(newId, newProduct);
+
+    // Sync to Supabase if configured
+    try {
+      const supabaseAdmin = getSupabaseAdminClient();
+      if (supabaseAdmin) {
+        await supabaseAdmin.from("products").insert([
+          {
+            id: newProduct.id,
+            name: newProduct.name,
+            category_id: newProduct.categoryId,
+            price: newProduct.price,
+            description: newProduct.description,
+            image_url: newProduct.imageUrl,
+            popular: newProduct.popular,
+            is_available: newProduct.isAvailable,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        ]);
+      }
+    } catch (dbErr) {
+      console.warn("Supabase admin insert warning:", dbErr);
+    }
+
+    // Broadcast realtime update
+    broadcastProductRealtime("product_updated", newProduct);
+
+    return res.status(201).json({
+      success: true,
+      product: newProduct,
+      message: `Product "${newProduct.name}" created successfully`,
+    });
+  } catch (error: any) {
+    console.error("Failed to create product:", error);
+    return res.status(500).json({ error: error?.message || "Failed to create product" });
+  }
+});
+
+/**
+ * DELETE /api/admin/products/:id
+ * Permanently removes product from catalog
+ */
+app.delete("/api/admin/products/:id", async (req, res) => {
+  const { id } = req.params;
+  const product = productsStore.get(id);
+  if (!product) {
+    return res.status(404).json({ error: "Product not found" });
+  }
+
+  productsStore.delete(id);
+
+  // Sync to Supabase if configured
+  try {
+    const supabaseAdmin = getSupabaseAdminClient();
+    if (supabaseAdmin) {
+      await supabaseAdmin.from("products").delete().eq("id", id);
+    }
+  } catch (dbErr) {
+    console.warn("Supabase admin delete warning:", dbErr);
+  }
+
+  // Broadcast deletion / update (availability false)
+  broadcastProductRealtime("product_updated", { ...product, isAvailable: false });
+
+  return res.json({
+    success: true,
+    message: `Product "${product.name}" deleted successfully`,
+    id,
+  });
 });
 
 /**
