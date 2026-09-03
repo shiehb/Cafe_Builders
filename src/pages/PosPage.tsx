@@ -311,7 +311,6 @@ export function PosPage() {
                         : "bg-stone-800 text-stone-400 hover:text-stone-200 hover:bg-stone-700"
                     }`}
                   >
-                    <span>{cat.iconEmoji}</span>
                     <span>{cat.name}</span>
                   </button>
                 ))}

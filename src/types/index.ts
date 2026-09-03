@@ -15,9 +15,10 @@ export interface CustomizationOption {
 }
 
 export interface ItemCustomization {
-  iceLevel?: "Regular Ice" | "Less Ice" | "No Ice" | "Extra Ice";
-  sweetness?: "Regular Sweetness" | "Less Sweet" | "Light Sweet" | "No Sugar" | "100%" | "75%" | "50%" | "25%" | "0%";
-  temperature?: "Hot" | "Iced" | "Standard";
+  size?: string;
+  iceLevel?: "Regular Ice" | "Less Ice" | "No Ice" | "Extra Ice" | "Normal Ice" | string;
+  sweetness?: "Regular Sweetness" | "Less Sweet" | "Light Sweet" | "No Sugar" | "100%" | "75%" | "50%" | "25%" | "0%" | "50% Sugar" | string;
+  temperature?: "Hot" | "Iced" | "Standard" | "Warm" | string;
   milkOption?: string;
   addOns?: string[];
   specialInstructions?: string;
@@ -112,6 +113,8 @@ export interface CheckoutPayload {
   orderType?: OrderType;
   paymentMethod: PaymentMethod;
   notes?: string;
+  discount?: number;
+  promoCode?: string;
 }
 
 export interface CheckoutResponse {

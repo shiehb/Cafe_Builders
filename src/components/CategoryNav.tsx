@@ -30,7 +30,6 @@ export const CategoryNav: React.FC<CategoryNavProps> = ({
                   : "bg-white text-[#1F2937] border border-[#E5E7EB] hover:bg-[#F7F9FA]"
               )}
             >
-              {cat.iconEmoji && <span className="text-xs">{cat.iconEmoji}</span>}
               <span>{cat.name}</span>
             </button>
           );

@@ -57,7 +57,39 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.getItem(LOCAL_STORAGE_CART_KEY) ||
         localStorage.getItem("cafe_customer_cart") ||
         localStorage.getItem("cafe_cart");
-      if (!stored) return [];
+      if (!stored) {
+        const p1 = PRODUCTS.find((p) => p.id === "prod_emerald_mint") || PRODUCTS[0];
+        const p2 = PRODUCTS.find((p) => p.id === "prod_pistachio_croissant") || PRODUCTS[1];
+        return [
+          {
+            id: "ci_emerald_mint",
+            productId: p1.id,
+            product: p1,
+            quantity: 1,
+            unitPrice: 5.45,
+            customizations: {
+              size: "Medium",
+              sweetness: "50% Sugar",
+              iceLevel: "Normal Ice",
+            },
+            customizationsTotal: 0,
+            lineTotal: 5.45,
+          },
+          {
+            id: "ci_pistachio_croissant",
+            productId: p2.id,
+            product: p2,
+            quantity: 2,
+            unitPrice: 4.80,
+            customizations: {
+              temperature: "Warm",
+              addOns: ["Premium glaze spread"],
+            },
+            customizationsTotal: 0,
+            lineTotal: 9.60,
+          },
+        ];
+      }
       const parsed = JSON.parse(stored);
       if (!Array.isArray(parsed)) return [];
       return parsed.map((item, idx) => {

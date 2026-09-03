@@ -26,8 +26,8 @@ export const SeasonalHeroCarousel: React.FC<SeasonalHeroCarouselProps> = ({
 
   // Link to existing products where possible
   const yuenyeung = products.find((p) => p.id === "prod_yuenyeung");
-  const matcha = products.find((p) => p.id === "prod_matcha_latte");
-  const croissant = products.find((p) => p.id === "prod_croissant");
+  const matcha = products.find((p) => p.id === "prod_matcha_latte" || p.id === "prod_emerald_mint" || p.id === "prod_pure_uji_matcha");
+  const croissant = products.find((p) => p.id === "prod_croissant" || p.id === "prod_butter_croissant" || p.id === "prod_pistachio_croissant");
 
   const seasonalItems: SeasonalBanner[] = [
     {
@@ -35,7 +35,7 @@ export const SeasonalHeroCarousel: React.FC<SeasonalHeroCarouselProps> = ({
       badge: "New Seasonal Special",
       title: "Yuenyeung Coffee Tea",
       tagline: "Hong Kong style bold Ceylon black tea & rich espresso",
-      price: yuenyeung?.price || 6.20,
+      price: yuenyeung?.price || 175,
       imageUrl: "https://images.unsplash.com/photo-1541167760496-1628856ab772?q=80&w=1200&auto=format&fit=crop",
       product: yuenyeung || products[0],
     },
@@ -44,7 +44,7 @@ export const SeasonalHeroCarousel: React.FC<SeasonalHeroCarouselProps> = ({
       badge: "Limited Spring Drop",
       title: "Uji Ceremonial Matcha",
       tagline: "Stone-ground Kyoto green tea topped with silky oat milk",
-      price: matcha?.price || 5.80,
+      price: matcha?.price || 180,
       imageUrl: "https://images.unsplash.com/photo-1536256263959-770b48d82b0a?q=80&w=1200&auto=format&fit=crop",
       product: matcha || products[1],
     },
@@ -53,7 +53,7 @@ export const SeasonalHeroCarousel: React.FC<SeasonalHeroCarouselProps> = ({
       badge: "Artisan Bakery",
       title: "Golden Butter Croissant",
       tagline: "Baked fresh daily with imported French Normandy butter",
-      price: croissant?.price || 3.95,
+      price: croissant?.price || 135,
       imageUrl: "https://images.unsplash.com/photo-1555507036-ab1f4038808a?q=80&w=1200&auto=format&fit=crop",
       product: croissant || products[2],
     },

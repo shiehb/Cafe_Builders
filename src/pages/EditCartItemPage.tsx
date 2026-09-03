@@ -1,26 +1,39 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { ArrowLeft, Check, Minus, Plus, AlertCircle } from "lucide-react";
+import { ChevronLeft, Check, Minus, Plus, AlertCircle } from "lucide-react";
 import { ItemCustomization } from "../types";
 import { formatPrice } from "../lib/utils";
 import { navigate } from "../lib/router";
 import { useCart } from "../context/CartContext";
 import { PRODUCTS } from "../data/menuData";
+import { isFoodCategory } from "./ItemCustomizationPage";
 
-const ICE_LEVELS = ["Less Ice", "Regular Ice", "No Ice", "Extra Ice"] as const;
-const SWEETNESS_CHOICES = ["Regular Sweetness", "Less Sweet", "Light Sweet", "No Sugar"] as const;
+const SUGAR_LEVELS = ["0%", "25%", "50%", "75%", "100%"] as const;
+const ICE_LEVELS = ["No Ice", "Less", "Normal", "Extra"] as const;
 
 const MILK_OPTIONS = [
   { label: "Whole Fresh Milk", price: 0 },
-  { label: "Oat Milk", price: 35 },
-  { label: "Almond Milk", price: 35 },
-  { label: "Soy Milk", price: 25 },
+  { label: "Oat Milk", price: 25 },
+  { label: "Almond Milk", price: 25 },
+  { label: "Soy Milk", price: 20 },
 ];
 
-const ADDON_OPTIONS = [
-  { label: "Extra Espresso Shot", price: 40 },
-  { label: "Himalayan Sea Salt Foam", price: 30 },
+const BEVERAGE_ADDONS = [
+  { label: "Extra Espresso Shot", price: 30 },
+  { label: "Himalayan Sea Salt Foam", price: 25 },
   { label: "Artisan Coffee Jelly", price: 25 },
   { label: "Vanilla Bean Syrup", price: 20 },
+];
+
+const FOOD_WARMING_OPTIONS = [
+  { label: "Warmed Up", description: "Freshly heated & served warm", icon: "♨️" },
+  { label: "Room Temp", description: "Served fresh as is", icon: "🥐" },
+];
+
+const FOOD_ADDONS = [
+  { label: "Extra Whipped Butter", price: 20 },
+  { label: "Artisan Honey Drizzle", price: 20 },
+  { label: "Crushed Roasted Pistachios", price: 30 },
+  { label: "Warm Chocolate Dip", price: 35 },
 ];
 
 interface EditCartItemPageProps {
@@ -30,7 +43,7 @@ interface EditCartItemPageProps {
 export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }) => {
   const { cart, updateCartItem } = useCart();
 
-  // Resolve effective cart with fallback to localStorage if context is still hydrating
+  // Resolve effective cart with fallback to localStorage
   const effectiveCart = useMemo(() => {
     if (cart && cart.length > 0) return cart;
     try {
@@ -65,27 +78,39 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
     PRODUCTS.find((p) => p.id === cleanTargetId) ||
     PRODUCTS[0];
 
+  const isFood = isFoodCategory(product);
+
   // Customization States
   const [quantity, setQuantity] = useState<number>(() => cartItem?.quantity || 1);
   const [temperature, setTemperature] = useState<"Hot" | "Iced">(() => {
-    if (cartItem?.customizations?.iceLevel) return "Iced";
-    if (
-      product?.temperatureOptions?.includes("Hot") &&
-      !product?.temperatureOptions?.includes("Iced")
-    ) {
-      return "Hot";
-    }
+    if (cartItem?.customizations?.temperature === "Hot") return "Hot";
     return "Iced";
   });
 
-  const [iceLevel, setIceLevel] = useState<"Regular Ice" | "Less Ice" | "No Ice" | "Extra Ice">(() => {
-    return (cartItem?.customizations?.iceLevel as any) || "Less Ice";
+  const [iceLevel, setIceLevel] = useState<string>(() => {
+    const raw = cartItem?.customizations?.iceLevel || "";
+    if (raw.includes("No")) return "No Ice";
+    if (raw.includes("Less")) return "Less";
+    if (raw.includes("Extra")) return "Extra";
+    return "Normal";
   });
 
-  const [sweetness, setSweetness] = useState<
-    "Regular Sweetness" | "Less Sweet" | "Light Sweet" | "No Sugar"
-  >(() => {
-    return (cartItem?.customizations?.sweetness as any) || "Regular Sweetness";
+  const [sweetness, setSweetness] = useState<string>(() => {
+    const raw = cartItem?.customizations?.sweetness || "";
+    if (raw.includes("0%")) return "0%";
+    if (raw.includes("25%")) return "25%";
+    if (raw.includes("75%")) return "75%";
+    if (raw.includes("100%")) return "100%";
+    if (raw.includes("No Sugar")) return "0%";
+    if (raw.includes("Light")) return "25%";
+    if (raw.includes("Less")) return "50%";
+    return "50%";
+  });
+
+  const [foodWarming, setFoodWarming] = useState<string>(() => {
+    return cartItem?.customizations?.temperature?.includes("Room")
+      ? "Room Temp"
+      : "Warmed Up";
   });
 
   const [selectedMilk, setSelectedMilk] = useState(() => {
@@ -98,7 +123,8 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
 
   const [selectedAddons, setSelectedAddons] = useState<{ label: string; price: number }[]>(() => {
     if (!cartItem?.customizations?.addOns || cartItem.customizations.addOns.length === 0) return [];
-    return ADDON_OPTIONS.filter((opt) =>
+    const sourceList = isFood ? FOOD_ADDONS : BEVERAGE_ADDONS;
+    return sourceList.filter((opt) =>
       cartItem.customizations.addOns?.some((str) => str.startsWith(opt.label))
     );
   });
@@ -113,21 +139,22 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
       setQuantity(cartItem.quantity);
       if (cartItem.customizations?.iceLevel) {
         setTemperature("Iced");
-        setIceLevel(cartItem.customizations.iceLevel as any);
+        const raw = cartItem.customizations.iceLevel;
+        if (raw.includes("No")) setIceLevel("No Ice");
+        else if (raw.includes("Less")) setIceLevel("Less");
+        else if (raw.includes("Extra")) setIceLevel("Extra");
+        else setIceLevel("Normal");
       }
       if (cartItem.customizations?.sweetness) {
-        setSweetness(cartItem.customizations.sweetness as any);
+        const raw = cartItem.customizations.sweetness;
+        if (raw.includes("0%")) setSweetness("0%");
+        else if (raw.includes("25%")) setSweetness("25%");
+        else if (raw.includes("75%")) setSweetness("75%");
+        else if (raw.includes("100%")) setSweetness("100%");
       }
       if (cartItem.customizations?.milkOption) {
         const found = MILK_OPTIONS.find((m) => m.label === cartItem.customizations.milkOption);
         if (found) setSelectedMilk(found);
-      }
-      if (cartItem.customizations?.addOns) {
-        setSelectedAddons(
-          ADDON_OPTIONS.filter((opt) =>
-            cartItem.customizations.addOns?.some((str) => str.startsWith(opt.label))
-          )
-        );
       }
       setSpecialInstructions(cartItem.customizations?.specialInstructions || "");
     }
@@ -148,7 +175,7 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
           onClick={() => navigate("/")}
           className="px-6 py-2.5 rounded-full bg-[#00A86B] text-white text-[12px] font-bold hover:bg-[#008F5B] transition-colors cursor-pointer inline-flex items-center gap-1.5"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ChevronLeft className="h-4 w-4" />
           <span>Explore Menu</span>
         </button>
       </div>
@@ -164,7 +191,7 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
   };
 
   const extraPricePerItem =
-    (product.milkOptionsAvailable ? selectedMilk.price : 0) +
+    (!isFood && product.milkOptionsAvailable ? selectedMilk.price : 0) +
     selectedAddons.reduce((sum, a) => sum + a.price, 0);
 
   const unitPrice = product.price + extraPricePerItem;
@@ -172,13 +199,20 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
 
   const handleUpdate = () => {
     if (!cartItem) return;
-    const updatedCustomizations: ItemCustomization = {
-      iceLevel: temperature === "Iced" ? iceLevel : undefined,
-      sweetness: product.sweetnessAdjustable ? sweetness : undefined,
-      milkOption: product.milkOptionsAvailable ? selectedMilk.label : undefined,
-      addOns: selectedAddons.map((a) => `${a.label} (+${formatPrice(a.price)})`),
-      specialInstructions: specialInstructions.trim() || undefined,
-    };
+    const updatedCustomizations: ItemCustomization = isFood
+      ? {
+          temperature: foodWarming,
+          addOns: selectedAddons.map((a) => `${a.label} (+${formatPrice(a.price)})`),
+          specialInstructions: specialInstructions.trim() || undefined,
+        }
+      : {
+          temperature: product.temperatureOptions && product.temperatureOptions.length > 1 ? temperature : undefined,
+          iceLevel: temperature === "Iced" ? iceLevel : undefined,
+          sweetness: sweetness ? `${sweetness} Sugar` : undefined,
+          milkOption: product.milkOptionsAvailable ? selectedMilk.label : undefined,
+          addOns: selectedAddons.map((a) => `${a.label} (+${formatPrice(a.price)})`),
+          specialInstructions: specialInstructions.trim() || undefined,
+        };
 
     updateCartItem(cartItem.id, quantity, updatedCustomizations, extraPricePerItem);
     navigate("/cart");
@@ -188,19 +222,19 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
     <div className="min-h-screen bg-[#F7F9FA] text-[#1F2937] flex flex-col font-sans pb-28">
       {/* 1. TOP BAR */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#E5E7EB] shadow-xs">
-        <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="max-w-md md:max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
           <button
             type="button"
             onClick={() => navigate("/cart")}
             aria-label="Back to Cart"
             title="Back to Cart"
-            className="h-10 w-10 rounded-full text-[#1F2937] hover:bg-[#F7F9FA] flex items-center justify-center transition-colors cursor-pointer -ml-2"
+            className="h-10 w-10 rounded-full text-[#1F2937] hover:bg-[#F3F4F6] flex items-center justify-center transition-colors cursor-pointer -ml-2"
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ChevronLeft className="h-6 w-6" />
           </button>
 
-          <span className="font-semibold text-[14px] leading-[20px] text-[#1F2937]">
-            Edit Cart Item
+          <span className="font-bold text-[15px] leading-[20px] text-[#1F2937]">
+            Edit Customization
           </span>
 
           <div className="w-10" />
@@ -208,9 +242,9 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
       </header>
 
       {/* 2. MEDIA SECTION & DETAILS */}
-      <main className="max-w-2xl w-full mx-auto px-4 py-4 space-y-4">
-        {/* Media Card */}
-        <div className="bg-white rounded-2xl overflow-hidden border border-[#E5E7EB] shadow-card">
+      <main className="max-w-md md:max-w-2xl w-full mx-auto px-4 py-4 space-y-4">
+        {/* Product Card */}
+        <div className="bg-white rounded-2xl overflow-hidden border border-[#E5E7EB] shadow-xs">
           <div className="relative aspect-video w-full bg-stone-100 overflow-hidden">
             <img
               src={product.imageUrl}
@@ -219,240 +253,280 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
             />
           </div>
 
-          <div className="p-4 sm:p-5 space-y-3">
+          <div className="p-4 sm:p-5 space-y-2">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h1 className="text-[20px] font-semibold text-[#1F2937] leading-[28px]">
+                <h1 className="text-[18px] sm:text-[20px] font-bold text-[#1F2937] leading-tight">
                   {product.name}
                 </h1>
                 <p className="text-[12px] text-[#6B7280] mt-0.5">
-                  Modifying item in your active tray
+                  Update item customization in your cart
                 </p>
               </div>
-              <span className="text-[16px] font-bold text-[#00A86B] shrink-0">
+              <span className="text-[18px] font-bold text-[#00A86B] shrink-0">
                 {formatPrice(product.price)}
               </span>
             </div>
-
-            {product.description && (
-              <div className="pt-2 border-t border-[#E5E7EB]">
-                <h2 className="text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider mb-1">
-                  About This Item
-                </h2>
-                <p className="text-[12px] text-[#6B7280] leading-[18px]">
-                  {product.description}
-                </p>
-              </div>
-            )}
           </div>
         </div>
 
-        <div className="space-y-4">
-          {/* Temperature - Hot vs Iced */}
-          {product.temperatureOptions && product.temperatureOptions.length > 1 && (
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E5E7EB] shadow-card space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-[14px] font-semibold text-[#1F2937] leading-[20px]">
-                  Temperature
-                </h2>
-                <span className="text-[11px] font-bold text-[#00A86B] uppercase tracking-wider">
-                  Required
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2.5">
-                {(["Iced", "Hot"] as const).map((opt) => {
-                  const isSelected = temperature === opt;
-                  return (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => setTemperature(opt)}
-                      className={`h-11 rounded-full border text-[13px] font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                        isSelected
-                          ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold shadow-2xs"
-                          : "border-[#E5E7EB] bg-white text-[#1F2937] hover:bg-[#F7F9FA]"
-                      }`}
-                    >
-                      <span>{opt === "Iced" ? "🧊 Iced" : "♨️ Hot"}</span>
-                      {isSelected && <Check className="h-4 w-4 text-[#00A86B]" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Ice Level (if Iced) */}
-          {temperature === "Iced" && (
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E5E7EB] shadow-card space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-[14px] font-semibold text-[#1F2937] leading-[20px]">
-                  Ice Preference
-                </h2>
-                <span className="text-[11px] font-bold text-[#00A86B] uppercase tracking-wider">
-                  Select 1
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2.5">
-                {ICE_LEVELS.map((opt) => {
-                  const isSelected = iceLevel === opt;
-                  return (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => setIceLevel(opt)}
-                      className={`h-11 px-4 rounded-full border text-[12px] font-semibold transition-all flex items-center justify-between cursor-pointer ${
-                        isSelected
-                          ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold shadow-2xs"
-                          : "border-[#E5E7EB] bg-white text-[#1F2937] hover:bg-[#F7F9FA]"
-                      }`}
-                    >
-                      <span>{opt}</span>
-                      {isSelected && <Check className="h-4 w-4 text-[#00A86B]" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Sweetness Level */}
-          {product.sweetnessAdjustable && (
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E5E7EB] shadow-card space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-[14px] font-semibold text-[#1F2937] leading-[20px]">
-                  Sweetness Level
-                </h2>
-                <span className="text-[11px] font-bold text-[#00A86B] uppercase tracking-wider">
-                  Select 1
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2.5">
-                {SWEETNESS_CHOICES.map((opt) => {
-                  const isSelected = sweetness === opt;
-                  return (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => setSweetness(opt)}
-                      className={`h-11 px-4 rounded-full border text-[12px] font-semibold transition-all flex items-center justify-between cursor-pointer ${
-                        isSelected
-                          ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold shadow-2xs"
-                          : "border-[#E5E7EB] bg-white text-[#1F2937] hover:bg-[#F7F9FA]"
-                      }`}
-                    >
-                      <span>{opt}</span>
-                      {isSelected && <Check className="h-4 w-4 text-[#00A86B]" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Milk Options */}
-          {product.milkOptionsAvailable && (
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E5E7EB] shadow-card space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-[14px] font-semibold text-[#1F2937] leading-[20px]">
-                  Milk Option
-                </h2>
-                <span className="text-[11px] font-bold text-[#00A86B] uppercase tracking-wider">
-                  Select 1
-                </span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {MILK_OPTIONS.map((milk) => {
-                  const isSelected = selectedMilk.label === milk.label;
-                  return (
-                    <button
-                      key={milk.label}
-                      type="button"
-                      onClick={() => setSelectedMilk(milk)}
-                      className={`p-3 rounded-full border text-[12px] font-semibold transition-all flex items-center justify-between px-4 cursor-pointer text-left ${
-                        isSelected
-                          ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold shadow-2xs"
-                          : "border-[#E5E7EB] bg-white text-[#1F2937] hover:bg-[#F7F9FA]"
-                      }`}
-                    >
-                      <div>
-                        <span className="block leading-tight">{milk.label}</span>
-                        {milk.price > 0 && (
-                          <span className="text-[11px] text-[#6B7280]">
-                            +{formatPrice(milk.price)}
-                          </span>
-                        )}
-                      </div>
-                      {isSelected && <Check className="h-4 w-4 text-[#00A86B] shrink-0" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Add-ons */}
-          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E5E7EB] shadow-card space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-[14px] font-semibold text-[#1F2937] leading-[20px]">
-                Add-ons & Enhancements
-              </h2>
-              <span className="text-[11px] text-[#6B7280]">Optional</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {ADDON_OPTIONS.map((addon) => {
-                const isChecked = selectedAddons.some((a) => a.label === addon.label);
-                return (
-                  <button
-                    key={addon.label}
-                    type="button"
-                    onClick={() => toggleAddon(addon)}
-                    className={`p-3 rounded-full border text-[12px] font-semibold transition-all flex items-center justify-between px-4 cursor-pointer ${
-                      isChecked
-                        ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold shadow-2xs"
-                        : "border-[#E5E7EB] bg-white text-[#1F2937] hover:bg-[#F7F9FA]"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`h-4 w-4 rounded-full border flex items-center justify-center ${
-                          isChecked
-                            ? "border-[#00A86B] bg-[#00A86B] text-white"
-                            : "border-[#E5E7EB] bg-white"
+        {/* CUSTOMIZATION OPTIONS */}
+        <div className="bg-white rounded-2xl p-5 border border-[#E5E7EB] shadow-xs space-y-5">
+          {isFood ? (
+            /* ===== FOOD / PASTRIES OPTIONS ===== */
+            <>
+              {/* Serving Preference */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-[15px] font-bold text-[#1F2937]">Serving Preference</h2>
+                  <span className="text-[11px] text-[#6B7280]">Select 1</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {FOOD_WARMING_OPTIONS.map((opt) => {
+                    const isSelected = foodWarming === opt.label;
+                    return (
+                      <button
+                        key={opt.label}
+                        type="button"
+                        onClick={() => setFoodWarming(opt.label)}
+                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? "border-[#00A86B] bg-[#E6F6F0]"
+                            : "border-[#E5E7EB] bg-[#F7F9FA] hover:bg-stone-100"
                         }`}
                       >
-                        {isChecked && <Check className="h-3 w-3 stroke-[3]" />}
-                      </div>
-                      <span>{addon.label}</span>
-                    </div>
-                    <span className="text-[11px] text-[#6B7280]">
-                      +{formatPrice(addon.price)}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className={`text-[13px] font-bold flex items-center gap-1.5 ${isSelected ? "text-[#00A86B]" : "text-[#1F2937]"}`}>
+                            <span>{opt.icon}</span>
+                            <span>{opt.label}</span>
+                          </span>
+                          {isSelected && <Check className="h-4 w-4 text-[#00A86B]" />}
+                        </div>
+                        <p className="text-[11px] text-[#6B7280]">{opt.description}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Food Add-ons */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-[15px] font-bold text-[#1F2937]">Add-ons & Extras</h2>
+                  <span className="text-[11px] text-[#6B7280]">Optional</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {FOOD_ADDONS.map((addon) => {
+                    const isChecked = selectedAddons.some((a) => a.label === addon.label);
+                    return (
+                      <button
+                        key={addon.label}
+                        type="button"
+                        onClick={() => toggleAddon(addon)}
+                        className={`p-3 rounded-2xl border text-[13px] font-medium transition-all flex items-center justify-between px-4 cursor-pointer ${
+                          isChecked
+                            ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
+                            : "border-[#E5E7EB] bg-[#F7F9FA] text-[#1F2937] hover:bg-stone-100"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className={`h-4 w-4 rounded-full border flex items-center justify-center ${
+                              isChecked
+                                ? "border-[#00A86B] bg-[#00A86B] text-white"
+                                : "border-[#D1D5DB] bg-white"
+                            }`}
+                          >
+                            {isChecked && <Check className="h-3 w-3 stroke-[3]" />}
+                          </div>
+                          <span>{addon.label}</span>
+                        </div>
+                        <span className="text-[11px] text-[#6B7280]">+{formatPrice(addon.price)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          ) : (
+            /* ===== BEVERAGE OPTIONS ===== */
+            <>
+              {/* Temperature */}
+              {product.temperatureOptions && product.temperatureOptions.length > 1 && (
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-[15px] font-bold text-[#1F2937]">Temperature</h2>
+                    <span className="text-[11px] text-[#6B7280]">Select 1</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {(["Iced", "Hot"] as const).map((opt) => {
+                      const isSelected = temperature === opt;
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => setTemperature(opt)}
+                          className={`h-11 rounded-2xl border text-[13px] font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                            isSelected
+                              ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
+                              : "border-[#E5E7EB] bg-[#F7F9FA] text-[#1F2937] hover:bg-stone-100"
+                          }`}
+                        >
+                          <span>{opt === "Iced" ? "🧊 Iced" : "♨️ Hot"}</span>
+                          {isSelected && <Check className="h-4 w-4 text-[#00A86B]" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Sugar Level */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-[15px] font-bold text-[#1F2937]">Sugar Level</h2>
+                  <span className="text-[11px] text-[#6B7280]">Select 1</span>
+                </div>
+                <div className="grid grid-cols-5 gap-2">
+                  {SUGAR_LEVELS.map((opt) => {
+                    const isSelected = sweetness === opt;
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => setSweetness(opt)}
+                        className={`h-10 rounded-xl border text-[13px] font-semibold transition-all cursor-pointer flex items-center justify-center ${
+                          isSelected
+                            ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
+                            : "border-[#E5E7EB] bg-[#F7F9FA] text-[#1F2937] hover:bg-stone-100"
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Ice Level (only when Iced) */}
+              {temperature === "Iced" && (
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-[15px] font-bold text-[#1F2937]">Ice Level</h2>
+                    <span className="text-[11px] text-[#6B7280]">Select 1</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {ICE_LEVELS.map((opt) => {
+                      const isSelected = iceLevel === opt;
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => setIceLevel(opt)}
+                          className={`h-10 rounded-xl border text-[13px] font-semibold transition-all cursor-pointer flex items-center justify-center ${
+                            isSelected
+                              ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
+                              : "border-[#E5E7EB] bg-[#F7F9FA] text-[#1F2937] hover:bg-stone-100"
+                          }`}
+                        >
+                          {opt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Milk Option */}
+              {product.milkOptionsAvailable && (
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-[15px] font-bold text-[#1F2937]">Dairy / Plant Milk</h2>
+                    <span className="text-[11px] text-[#6B7280]">Optional</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {MILK_OPTIONS.map((milk) => {
+                      const isSelected = selectedMilk.label === milk.label;
+                      return (
+                        <button
+                          key={milk.label}
+                          type="button"
+                          onClick={() => setSelectedMilk(milk)}
+                          className={`p-2.5 rounded-xl border text-[12px] font-semibold transition-all flex items-center justify-between px-3.5 cursor-pointer ${
+                            isSelected
+                              ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
+                              : "border-[#E5E7EB] bg-[#F7F9FA] text-[#1F2937] hover:bg-stone-100"
+                          }`}
+                        >
+                          <span>{milk.label}</span>
+                          {milk.price > 0 && (
+                            <span className="text-[10px] text-[#6B7280]">+{formatPrice(milk.price)}</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Beverage Add-ons */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-[15px] font-bold text-[#1F2937]">Add-ons & Toppings</h2>
+                  <span className="text-[11px] text-[#6B7280]">Optional</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {BEVERAGE_ADDONS.map((addon) => {
+                    const isChecked = selectedAddons.some((a) => a.label === addon.label);
+                    return (
+                      <button
+                        key={addon.label}
+                        type="button"
+                        onClick={() => toggleAddon(addon)}
+                        className={`p-3 rounded-2xl border text-[13px] font-medium transition-all flex items-center justify-between px-4 cursor-pointer ${
+                          isChecked
+                            ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
+                            : "border-[#E5E7EB] bg-[#F7F9FA] text-[#1F2937] hover:bg-stone-100"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className={`h-4 w-4 rounded-full border flex items-center justify-center ${
+                              isChecked
+                                ? "border-[#00A86B] bg-[#00A86B] text-white"
+                                : "border-[#D1D5DB] bg-white"
+                            }`}
+                          >
+                            {isChecked && <Check className="h-3 w-3 stroke-[3]" />}
+                          </div>
+                          <span>{addon.label}</span>
+                        </div>
+                        <span className="text-[11px] text-[#6B7280]">+{formatPrice(addon.price)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Special Instructions */}
-          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E5E7EB] shadow-card space-y-2">
-            <h2 className="text-[14px] font-semibold text-[#1F2937] leading-[20px]">
-              Special Notes
-            </h2>
+          <div className="space-y-2">
+            <h2 className="text-[15px] font-bold text-[#1F2937]">Special Notes</h2>
             <textarea
               rows={2}
               value={specialInstructions}
               onChange={(e) => setSpecialInstructions(e.target.value)}
-              placeholder="e.g. Extra hot, separate lid, extra straw..."
-              className="w-full p-3 rounded-2xl border border-[#E5E7EB] bg-[#F7F9FA] text-[12px] text-[#1F2937] focus:bg-white focus:outline-none focus:border-[#00A86B] transition-all resize-none"
+              placeholder="Special notes or preparation instructions..."
+              className="w-full p-3 rounded-2xl border border-[#E5E7EB] bg-[#F7F9FA] text-[13px] text-[#1F2937] focus:bg-white focus:outline-none focus:border-[#00A86B] transition-all resize-none"
             />
           </div>
         </div>
       </main>
 
-      {/* 3. STICKY BOTTOM BAR: Quantity Stepper & Update Cart Item button */}
-      <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-[#E5E7EB] p-3 sm:p-4 shadow-footer">
-        <div className="max-w-2xl mx-auto flex items-center gap-3">
+      {/* 3. STICKY BOTTOM BAR */}
+      <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-[#E5E7EB] p-3.5 sm:p-4 shadow-footer">
+        <div className="max-w-md md:max-w-2xl mx-auto flex items-center gap-3">
           {/* Quantity Stepper */}
           <div className="flex items-center border border-[#E5E7EB] bg-[#F7F9FA] rounded-full p-1 shrink-0">
             <button
@@ -476,13 +550,13 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
             </button>
           </div>
 
-          {/* Wide Button ("Update Cart Item • ₱...") */}
+          {/* Save Changes Button */}
           <button
             type="button"
             onClick={handleUpdate}
-            className="flex-1 h-11 rounded-full bg-[#00A86B] hover:bg-[#008F5B] text-white font-bold text-[14px] leading-[20px] flex items-center justify-center shadow-xs transition-colors cursor-pointer active:scale-[0.99]"
+            className="flex-1 h-12 rounded-full bg-[#00A86B] hover:bg-[#008F5B] text-white font-bold text-[14px] leading-[20px] flex items-center justify-center shadow-xs transition-colors cursor-pointer active:scale-[0.99]"
           >
-            Update Cart Item • {formatPrice(lineTotal)}
+            Update Item • {formatPrice(lineTotal)}
           </button>
         </div>
       </div>

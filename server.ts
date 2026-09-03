@@ -498,8 +498,9 @@ app.post("/api/checkout", async (req, res) => {
     }
 
     const subtotal = items.reduce((sum, it) => sum + (it.subtotal || it.unitPrice * it.quantity), 0);
+    const discount = Math.max(0, Number(body.discount) || 0);
     const serviceFee = 0;
-    const totalAmount = subtotal + serviceFee;
+    const totalAmount = Math.max(0, Math.round((subtotal - discount + serviceFee) * 100) / 100);
 
     const orderNumber = getNextOrderNumber();
     let qrCodeUrl: string | null = null;
@@ -520,6 +521,13 @@ app.post("/api/checkout", async (req, res) => {
     const now = new Date().toISOString();
     const orderId = `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
+    const orderNotes = [
+      notes,
+      body.promoCode ? `Promo: ${body.promoCode} (-₱${discount.toFixed(2)})` : null,
+    ]
+      .filter(Boolean)
+      .join(" • ");
+
     const newOrder: Order = {
       id: orderId,
       orderNumber,
@@ -530,7 +538,7 @@ app.post("/api/checkout", async (req, res) => {
       qrCodeUrl,
       customerName: customerName?.trim() ? customerName.trim() : "Guest",
       orderType: orderType || "DINE_IN",
-      notes: notes || null,
+      notes: orderNotes || null,
       subtotal,
       serviceFee,
       totalAmount,

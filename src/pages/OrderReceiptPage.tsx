@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  ArrowLeft,
+  ChevronLeft,
   Clock,
   BellRing,
   ChefHat,
@@ -127,7 +127,7 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
           onClick={() => navigate("/")}
           className="px-5 py-2 rounded-full bg-[#00A86B] text-white text-[12px] font-bold hover:bg-[#008F5B] transition-colors cursor-pointer inline-flex items-center gap-1.5"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ChevronLeft className="h-4 w-4" />
           <span>Back to Menu</span>
         </button>
       </div>
@@ -170,7 +170,6 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
 
   const statusInfo = getStatusInfo();
   const StatusIcon = statusInfo.icon;
-  const serviceCharge = (order.subtotal || order.totalAmount) * 0.05;
 
   return (
     <div className="min-h-screen bg-[#F7F9FA] text-[#1F2937] flex flex-col font-sans pb-28">
@@ -184,7 +183,7 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
             title="Back to Menu"
             className="h-10 w-10 rounded-full text-[#1F2937] hover:bg-[#F7F9FA] flex items-center justify-center transition-colors cursor-pointer -ml-2"
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ChevronLeft className="h-6 w-6" />
           </button>
 
           <span className="font-semibold text-[14px] leading-[20px] text-[#1F2937]">
@@ -397,7 +396,7 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
             </div>
           </div>
 
-          {/* Payment Summary (Subtotal, Tax, Payment method used) */}
+          {/* Payment Summary (Subtotal, Discounts, Payment method used) */}
           <div className="border-t border-[#E5E7EB] pt-3.5 space-y-2 text-[12px]">
             <div className="flex justify-between text-[#6B7280]">
               <span>Subtotal</span>
@@ -405,12 +404,14 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
                 {formatPrice(order.subtotal || order.totalAmount)}
               </span>
             </div>
-            <div className="flex justify-between text-[#6B7280]">
-              <span>Tax / Service Charge (5%)</span>
-              <span className="font-semibold text-[#1F2937]">
-                {formatPrice(serviceCharge)}
-              </span>
-            </div>
+            {order.discount && order.discount > 0 && (
+              <div className="flex justify-between text-[#6B7280]">
+                <span>Discount {order.promoCode ? `(${order.promoCode})` : ""}</span>
+                <span className="font-semibold text-[#00A86B]">
+                  -{formatPrice(order.discount)}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between text-[#6B7280]">
               <span>Payment Method</span>
               <span className="font-semibold text-[#1F2937]">

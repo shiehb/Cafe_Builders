@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ArrowLeft, Check, AlertCircle, RefreshCw, QrCode, Banknote } from "lucide-react";
+import { ChevronLeft, Check, AlertCircle, RefreshCw, QrCode, Banknote, Tag, X } from "lucide-react";
 import { Order } from "../types";
 import { formatPrice } from "../lib/utils";
 import { navigate } from "../lib/router";
@@ -14,13 +14,51 @@ export const CheckoutPage: React.FC = () => {
   const [customerName, setCustomerName] = useState<string>("");
   const [paymentOption, setPaymentOption] = useState<CheckoutPaymentOption>("QRPH");
 
+  // Promo Code State
+  const [promoInput, setPromoInput] = useState<string>("");
+  const [promoDiscount, setPromoDiscount] = useState<number>(0);
+  const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null);
+  const [promoMessage, setPromoMessage] = useState<{ text: string; isError: boolean } | null>(null);
+
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Financials
-  const serviceCharge = cartTotal * 0.05;
-  const finalTotal = cartTotal + serviceCharge;
+  const handleApplyPromo = () => {
+    const code = promoInput.trim().toUpperCase();
+    if (!code) {
+      setPromoMessage({ text: "Please enter a valid promo code.", isError: true });
+      return;
+    }
+
+    if (code === "COFFEE10" || code === "WELCOME10" || code === "SAVE10") {
+      const discount = Math.round(cartTotal * 0.1 * 100) / 100;
+      setPromoDiscount(discount);
+      setAppliedPromoCode(code);
+      setPromoMessage({ text: `Code ${code} applied! 10% off.`, isError: false });
+    } else if (code === "CAFE20" || code === "SAVE20") {
+      const discount = Math.round(cartTotal * 0.2 * 100) / 100;
+      setPromoDiscount(discount);
+      setAppliedPromoCode(code);
+      setPromoMessage({ text: `Code ${code} applied! 20% off.`, isError: false });
+    } else {
+      // Friendly demo response
+      const discount = Math.min(50, Math.round(cartTotal * 0.05 * 100) / 100);
+      setPromoDiscount(discount);
+      setAppliedPromoCode(code);
+      setPromoMessage({ text: `Promo "${code}" applied successfully!`, isError: false });
+    }
+  };
+
+  const handleRemovePromo = () => {
+    setPromoDiscount(0);
+    setAppliedPromoCode(null);
+    setPromoMessage(null);
+    setPromoInput("");
+  };
+
+  // Financials: Items Subtotal minus any applied promo discount
+  const finalTotal = Math.max(0, Math.round((cartTotal - promoDiscount) * 100) / 100);
 
   // Empty cart guard
   if (cart.length === 0) {
@@ -38,7 +76,7 @@ export const CheckoutPage: React.FC = () => {
           onClick={() => navigate("/")}
           className="px-5 py-2 rounded-full bg-[#00A86B] text-white text-[12px] font-bold hover:bg-[#008F5B] transition-colors cursor-pointer inline-flex items-center gap-1.5"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ChevronLeft className="h-4 w-4" />
           <span>Back to Menu</span>
         </button>
       </div>
@@ -68,9 +106,12 @@ export const CheckoutPage: React.FC = () => {
       orderType,
       paymentMethod: paymentOption,
       paymentBrand: paymentOption === "QRPH" ? "QR Ph" : "Cash",
+      discount: promoDiscount,
+      promoCode: appliedPromoCode || undefined,
       notes: [
         orderType === "DINE_IN" ? "Dine-In Cafe" : "Takeaway",
         paymentOption === "QRPH" ? "Payment: QR Ph" : "Payment: Cash at Counter",
+        appliedPromoCode ? `Promo: ${appliedPromoCode} (-${formatPrice(promoDiscount)})` : null,
       ]
         .filter(Boolean)
         .join(" • "),
@@ -114,7 +155,7 @@ export const CheckoutPage: React.FC = () => {
             title="Back to Cart"
             className="h-10 w-10 rounded-full text-[#1F2937] hover:bg-[#F7F9FA] flex items-center justify-center transition-colors cursor-pointer -ml-2"
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ChevronLeft className="h-6 w-6" />
           </button>
 
           <span className="font-semibold text-[14px] leading-[20px] text-[#1F2937]">
@@ -190,6 +231,86 @@ export const CheckoutPage: React.FC = () => {
                 );
               })}
             </div>
+          </div>
+
+          {/* SECTION: Promotion Code (Placed below Order Review) */}
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E5E7EB] shadow-card space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Tag className="h-4 w-4 text-[#00A86B]" />
+                <h2 className="text-[14px] font-semibold text-[#1F2937] leading-[20px]">
+                  Promotion Code
+                </h2>
+              </div>
+              {appliedPromoCode && (
+                <span className="text-[11px] font-bold text-[#00A86B] bg-[#E6F6F0] px-2.5 py-0.5 rounded-full">
+                  Applied
+                </span>
+              )}
+            </div>
+
+            {appliedPromoCode ? (
+              <div className="flex items-center justify-between p-3 rounded-xl bg-[#E6F6F0] border border-[#00A86B]/30">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="h-7 w-7 rounded-full bg-[#00A86B] text-white flex items-center justify-center shrink-0">
+                    <Check className="h-4 w-4 stroke-[3]" />
+                  </div>
+                  <div className="truncate">
+                    <span className="text-[13px] font-bold text-[#00A86B]">
+                      {appliedPromoCode}
+                    </span>
+                    <span className="text-[12px] text-[#008F5B] font-medium ml-2">
+                      -{formatPrice(promoDiscount)} applied
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRemovePromo}
+                  className="px-2.5 py-1 text-xs font-semibold text-[#6B7280] hover:text-rose-600 rounded-lg hover:bg-white/80 transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  <span>Remove</span>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 flex items-center gap-2.5 bg-white border border-[#E5E7EB] rounded-xl px-3.5 py-2.5 shadow-xs focus-within:border-[#00A86B] focus-within:ring-1 focus-within:ring-[#00A86B]">
+                    <Tag className="h-4 w-4 text-[#9CA3AF] shrink-0" />
+                    <input
+                      type="text"
+                      value={promoInput}
+                      onChange={(e) => setPromoInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleApplyPromo();
+                        }
+                      }}
+                      placeholder="Enter promo code (e.g. WELCOME10)"
+                      className="w-full bg-transparent text-[13px] text-[#1F2937] placeholder:text-[#9CA3AF] outline-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleApplyPromo}
+                    className="px-4 py-2.5 rounded-xl border border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold text-[13px] hover:bg-[#00A86B] hover:text-white transition-colors cursor-pointer shrink-0 active:scale-98"
+                  >
+                    Apply
+                  </button>
+                </div>
+                {promoMessage && (
+                  <p
+                    className={`text-xs px-1 ${
+                      promoMessage.isError ? "text-rose-600" : "text-[#00A86B]"
+                    }`}
+                  >
+                    {promoMessage.text}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* SECTION A: Customer Info */}
@@ -332,12 +453,14 @@ export const CheckoutPage: React.FC = () => {
           <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E5E7EB] shadow-card space-y-2 text-[12px] text-[#1F2937]">
             <div className="flex justify-between text-[#6B7280]">
               <span>Items Subtotal ({cartItemCount})</span>
-              <span>{formatPrice(cartTotal)}</span>
+              <span className="font-medium text-[#1F2937]">{formatPrice(cartTotal)}</span>
             </div>
-            <div className="flex justify-between text-[#6B7280]">
-              <span>Tax / Service Charge (5%)</span>
-              <span>{formatPrice(serviceCharge)}</span>
-            </div>
+            {promoDiscount > 0 && (
+              <div className="flex justify-between text-[#6B7280]">
+                <span>Discount ({appliedPromoCode})</span>
+                <span className="font-semibold text-[#00A86B]">-{formatPrice(promoDiscount)}</span>
+              </div>
+            )}
             <div className="border-t border-[#E5E7EB] pt-2 flex justify-between font-bold text-[14px] text-[#1F2937]">
               <span>Total Due</span>
               <span className="text-[#00A86B]">{formatPrice(finalTotal)}</span>
