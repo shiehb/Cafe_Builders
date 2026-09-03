@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { ArrowLeft, Check, Minus, Plus, AlertCircle } from "lucide-react";
 import { ItemCustomization } from "../types";
 import { formatPrice } from "../lib/utils";
 import { navigate } from "../lib/router";
 import { useCart } from "../context/CartContext";
+import { PRODUCTS } from "../data/menuData";
 
 const ICE_LEVELS = ["Less Ice", "Regular Ice", "No Ice", "Extra Ice"] as const;
 const SWEETNESS_CHOICES = ["Regular Sweetness", "Less Sweet", "Light Sweet", "No Sugar"] as const;
@@ -29,21 +30,43 @@ interface EditCartItemPageProps {
 export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }) => {
   const { cart, updateCartItem } = useCart();
 
-  const normalizedSearchId = decodeURIComponent(cartItemId || "").trim().toLowerCase();
-  const cartItem =
-    cart.find((i) => {
-      if (i.id === cartItemId) return true;
-      if (decodeURIComponent(i.id) === decodeURIComponent(cartItemId)) return true;
-      if (i.id.toLowerCase() === normalizedSearchId) return true;
-      if (decodeURIComponent(i.id).toLowerCase() === normalizedSearchId) return true;
-      return false;
-    }) ||
-    (cart.length === 1 ? cart[0] : cart.find((i) => i.productId === cartItemId || i.productId === normalizedSearchId));
+  // Resolve effective cart with fallback to localStorage if context is still hydrating
+  const effectiveCart = useMemo(() => {
+    if (cart && cart.length > 0) return cart;
+    try {
+      const stored =
+        localStorage.getItem("cafe_customer_cart_v2") ||
+        localStorage.getItem("cafe_customer_cart") ||
+        localStorage.getItem("cafe_cart");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return cart || [];
+  }, [cart]);
 
-  const product = cartItem?.product;
+  const cleanTargetId = decodeURIComponent(cartItemId || "").trim();
+  const normalizedSearchId = cleanTargetId.toLowerCase();
+
+  const cartItem =
+    effectiveCart.find((i) => i.id === cartItemId || i.id === cleanTargetId) ||
+    effectiveCart.find((i) => decodeURIComponent(i.id || "") === cleanTargetId) ||
+    effectiveCart.find((i) => (i.id || "").toLowerCase() === normalizedSearchId) ||
+    effectiveCart.find((i) => (i.productId || "").toLowerCase() === normalizedSearchId) ||
+    effectiveCart.find((i) => (i.product?.id || "").toLowerCase() === normalizedSearchId) ||
+    (!isNaN(Number(cleanTargetId)) && effectiveCart[Number(cleanTargetId)]) ||
+    (effectiveCart.length === 1 ? effectiveCart[0] : undefined) ||
+    effectiveCart[0];
+
+  const product =
+    cartItem?.product ||
+    (cartItem?.productId ? PRODUCTS.find((p) => p.id === cartItem.productId) : undefined) ||
+    PRODUCTS.find((p) => p.id === cleanTargetId) ||
+    PRODUCTS[0];
 
   // Customization States
-  const [quantity, setQuantity] = useState<number>(cartItem?.quantity || 1);
+  const [quantity, setQuantity] = useState<number>(() => cartItem?.quantity || 1);
   const [temperature, setTemperature] = useState<"Hot" | "Iced">(() => {
     if (cartItem?.customizations?.iceLevel) return "Iced";
     if (
@@ -81,7 +104,7 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
   });
 
   const [specialInstructions, setSpecialInstructions] = useState<string>(
-    cartItem?.customizations?.specialInstructions || ""
+    () => cartItem?.customizations?.specialInstructions || ""
   );
 
   // Sync if cartItem changes
@@ -110,23 +133,23 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
     }
   }, [cartItem]);
 
-  if (!cartItem || !product) {
+  if (!cartItem || !product || effectiveCart.length === 0) {
     return (
       <div className="min-h-screen bg-[#F7F9FA] flex flex-col items-center justify-center p-6 text-center space-y-4 font-sans">
         <AlertCircle className="h-12 w-12 text-[#6B7280]" />
         <div>
-          <h2 className="text-[16px] font-semibold text-[#1F2937]">Item Not in Cart</h2>
-          <p className="text-[12px] text-[#6B7280] mt-1">
-            This item may have been removed or already modified.
+          <h2 className="text-[16px] font-semibold text-[#1F2937]">Your Cart is Empty</h2>
+          <p className="text-[12px] text-[#6B7280] mt-1 max-w-xs mx-auto">
+            There are no items in your cart to edit. Browse our menu to add your favorite drinks and treats.
           </p>
         </div>
         <button
           type="button"
-          onClick={() => navigate("/cart")}
-          className="px-4 py-2 rounded-xl bg-[#00A86B] text-white text-[12px] font-bold hover:bg-[#008F5B] transition-colors cursor-pointer inline-flex items-center gap-1.5"
+          onClick={() => navigate("/")}
+          className="px-6 py-2.5 rounded-full bg-[#00A86B] text-white text-[12px] font-bold hover:bg-[#008F5B] transition-colors cursor-pointer inline-flex items-center gap-1.5"
         >
           <ArrowLeft className="h-4 w-4" />
-          <span>Back to Cart</span>
+          <span>Explore Menu</span>
         </button>
       </div>
     );
@@ -171,7 +194,7 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
             onClick={() => navigate("/cart")}
             aria-label="Back to Cart"
             title="Back to Cart"
-            className="h-10 w-10 rounded-xl text-[#1F2937] hover:bg-[#F7F9FA] flex items-center justify-center transition-colors cursor-pointer -ml-2"
+            className="h-10 w-10 rounded-full text-[#1F2937] hover:bg-[#F7F9FA] flex items-center justify-center transition-colors cursor-pointer -ml-2"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -244,7 +267,7 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
                       key={opt}
                       type="button"
                       onClick={() => setTemperature(opt)}
-                      className={`h-11 rounded-xl border text-[13px] font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      className={`h-11 rounded-full border text-[13px] font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer ${
                         isSelected
                           ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold shadow-2xs"
                           : "border-[#E5E7EB] bg-white text-[#1F2937] hover:bg-[#F7F9FA]"
@@ -278,7 +301,7 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
                       key={opt}
                       type="button"
                       onClick={() => setIceLevel(opt)}
-                      className={`h-11 px-3 rounded-xl border text-[12px] font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                      className={`h-11 px-4 rounded-full border text-[12px] font-semibold transition-all flex items-center justify-between cursor-pointer ${
                         isSelected
                           ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold shadow-2xs"
                           : "border-[#E5E7EB] bg-white text-[#1F2937] hover:bg-[#F7F9FA]"
@@ -312,7 +335,7 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
                       key={opt}
                       type="button"
                       onClick={() => setSweetness(opt)}
-                      className={`h-11 px-3 rounded-xl border text-[12px] font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                      className={`h-11 px-4 rounded-full border text-[12px] font-semibold transition-all flex items-center justify-between cursor-pointer ${
                         isSelected
                           ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold shadow-2xs"
                           : "border-[#E5E7EB] bg-white text-[#1F2937] hover:bg-[#F7F9FA]"
@@ -346,7 +369,7 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
                       key={milk.label}
                       type="button"
                       onClick={() => setSelectedMilk(milk)}
-                      className={`p-3 rounded-xl border text-[12px] font-semibold transition-all flex items-center justify-between cursor-pointer text-left ${
+                      className={`p-3 rounded-full border text-[12px] font-semibold transition-all flex items-center justify-between px-4 cursor-pointer text-left ${
                         isSelected
                           ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold shadow-2xs"
                           : "border-[#E5E7EB] bg-white text-[#1F2937] hover:bg-[#F7F9FA]"
@@ -384,7 +407,7 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
                     key={addon.label}
                     type="button"
                     onClick={() => toggleAddon(addon)}
-                    className={`p-3 rounded-xl border text-[12px] font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                    className={`p-3 rounded-full border text-[12px] font-semibold transition-all flex items-center justify-between px-4 cursor-pointer ${
                       isChecked
                         ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold shadow-2xs"
                         : "border-[#E5E7EB] bg-white text-[#1F2937] hover:bg-[#F7F9FA]"
@@ -392,7 +415,7 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
                   >
                     <div className="flex items-center gap-2">
                       <div
-                        className={`h-4 w-4 rounded-md border flex items-center justify-center ${
+                        className={`h-4 w-4 rounded-full border flex items-center justify-center ${
                           isChecked
                             ? "border-[#00A86B] bg-[#00A86B] text-white"
                             : "border-[#E5E7EB] bg-white"
@@ -421,7 +444,7 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
               value={specialInstructions}
               onChange={(e) => setSpecialInstructions(e.target.value)}
               placeholder="e.g. Extra hot, separate lid, extra straw..."
-              className="w-full p-3 rounded-xl border border-[#E5E7EB] bg-[#F7F9FA] text-[12px] text-[#1F2937] focus:bg-white focus:outline-none focus:border-[#00A86B] transition-all resize-none"
+              className="w-full p-3 rounded-2xl border border-[#E5E7EB] bg-[#F7F9FA] text-[12px] text-[#1F2937] focus:bg-white focus:outline-none focus:border-[#00A86B] transition-all resize-none"
             />
           </div>
         </div>
@@ -431,12 +454,12 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
       <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-[#E5E7EB] p-3 sm:p-4 shadow-footer">
         <div className="max-w-2xl mx-auto flex items-center gap-3">
           {/* Quantity Stepper */}
-          <div className="flex items-center border border-[#E5E7EB] bg-[#F7F9FA] rounded-xl p-1 shrink-0">
+          <div className="flex items-center border border-[#E5E7EB] bg-[#F7F9FA] rounded-full p-1 shrink-0">
             <button
               type="button"
               onClick={() => setQuantity((q) => Math.max(1, q - 1))}
               aria-label="Decrease quantity"
-              className="h-9 w-9 rounded-lg flex items-center justify-center text-[#1F2937] hover:bg-white hover:shadow-xs transition-all cursor-pointer"
+              className="h-9 w-9 rounded-full flex items-center justify-center text-[#1F2937] hover:bg-white hover:shadow-xs transition-all cursor-pointer"
             >
               <Minus className="h-4 w-4" />
             </button>
@@ -447,7 +470,7 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
               type="button"
               onClick={() => setQuantity((q) => q + 1)}
               aria-label="Increase quantity"
-              className="h-9 w-9 rounded-lg flex items-center justify-center text-[#1F2937] hover:bg-white hover:shadow-xs transition-all cursor-pointer"
+              className="h-9 w-9 rounded-full flex items-center justify-center text-[#1F2937] hover:bg-white hover:shadow-xs transition-all cursor-pointer"
             >
               <Plus className="h-4 w-4" />
             </button>
@@ -457,7 +480,7 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
           <button
             type="button"
             onClick={handleUpdate}
-            className="flex-1 h-11 rounded-xl bg-[#00A86B] hover:bg-[#008F5B] text-white font-bold text-[14px] leading-[20px] flex items-center justify-center shadow-xs transition-colors cursor-pointer active:scale-[0.99]"
+            className="flex-1 h-11 rounded-full bg-[#00A86B] hover:bg-[#008F5B] text-white font-bold text-[14px] leading-[20px] flex items-center justify-center shadow-xs transition-colors cursor-pointer active:scale-[0.99]"
           >
             Update Cart Item • {formatPrice(lineTotal)}
           </button>

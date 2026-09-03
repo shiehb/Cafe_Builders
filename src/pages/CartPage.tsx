@@ -47,7 +47,7 @@ export const CartPage: React.FC = () => {
             onClick={() => navigate("/")}
             aria-label="Back to Menu"
             title="Back to Menu"
-            className="h-10 w-10 rounded-xl text-[#1F2937] hover:bg-[#F7F9FA] flex items-center justify-center transition-colors cursor-pointer -ml-2"
+            className="h-10 w-10 rounded-full text-[#1F2937] hover:bg-[#F7F9FA] flex items-center justify-center transition-colors cursor-pointer -ml-2"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -63,7 +63,7 @@ export const CartPage: React.FC = () => {
               type="button"
               onClick={() => setIsClearConfirmOpen(true)}
               aria-label="Clear Cart"
-              className="text-[13px] font-bold text-rose-600 hover:text-rose-700 px-2 py-1 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+              className="text-[13px] font-bold text-rose-600 hover:text-rose-700 px-3 py-1 rounded-full hover:bg-rose-50 transition-colors cursor-pointer"
             >
               Clear
             </button>
@@ -88,7 +88,7 @@ export const CartPage: React.FC = () => {
             <button
               type="button"
               onClick={() => navigate("/")}
-              className="mt-2 px-5 py-2.5 rounded-xl bg-[#00A86B] hover:bg-[#008F5B] text-white text-[12px] font-bold transition-colors cursor-pointer"
+              className="mt-2 px-6 py-2.5 rounded-full bg-[#00A86B] hover:bg-[#008F5B] text-white text-[12px] font-bold transition-colors cursor-pointer"
             >
               Explore Menu
             </button>
@@ -158,7 +158,7 @@ export const CartPage: React.FC = () => {
                     </div>
 
                     {/* Inline Quantity Stepper */}
-                    <div className="flex items-center border border-[#E5E7EB] bg-[#F7F9FA] rounded-xl p-0.5 shrink-0">
+                    <div className="flex items-center border border-[#E5E7EB] bg-[#F7F9FA] rounded-full p-0.5 shrink-0">
                       <button
                         type="button"
                         onClick={() => {
@@ -169,7 +169,7 @@ export const CartPage: React.FC = () => {
                           }
                         }}
                         aria-label="Decrease quantity"
-                        className="h-7 w-7 rounded-lg flex items-center justify-center text-[#1F2937] hover:bg-white transition-colors cursor-pointer"
+                        className="h-7 w-7 rounded-full flex items-center justify-center text-[#1F2937] hover:bg-white transition-colors cursor-pointer"
                       >
                         <Minus className="h-3.5 w-3.5" />
                       </button>
@@ -180,7 +180,7 @@ export const CartPage: React.FC = () => {
                         type="button"
                         onClick={() => updateQuantity(item.id, item.quantity + 1)}
                         aria-label="Increase quantity"
-                        className="h-7 w-7 rounded-lg flex items-center justify-center text-[#1F2937] hover:bg-white transition-colors cursor-pointer"
+                        className="h-7 w-7 rounded-full flex items-center justify-center text-[#1F2937] hover:bg-white transition-colors cursor-pointer"
                       >
                         <Plus className="h-3.5 w-3.5" />
                       </button>
@@ -225,7 +225,7 @@ export const CartPage: React.FC = () => {
             <button
               type="button"
               onClick={() => navigate("/checkout")}
-              className="w-full h-11 rounded-xl bg-[#00A86B] hover:bg-[#008F5B] text-white font-bold text-[14px] leading-[20px] flex items-center justify-between px-5 shadow-xs transition-colors cursor-pointer active:scale-[0.99]"
+              className="w-full h-11 rounded-full bg-[#00A86B] hover:bg-[#008F5B] text-white font-bold text-[14px] leading-[20px] flex items-center justify-between px-5 shadow-xs transition-colors cursor-pointer active:scale-[0.99]"
             >
               <span>Proceed to Checkout</span>
               <div className="flex items-center gap-1.5">

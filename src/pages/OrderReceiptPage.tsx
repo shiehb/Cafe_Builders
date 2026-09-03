@@ -125,7 +125,7 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="px-4 py-2 rounded-xl bg-[#00A86B] text-white text-[12px] font-bold hover:bg-[#008F5B] transition-colors cursor-pointer inline-flex items-center gap-1.5"
+          className="px-5 py-2 rounded-full bg-[#00A86B] text-white text-[12px] font-bold hover:bg-[#008F5B] transition-colors cursor-pointer inline-flex items-center gap-1.5"
         >
           <ArrowLeft className="h-4 w-4" />
           <span>Back to Menu</span>
@@ -182,7 +182,7 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
             onClick={() => navigate("/")}
             aria-label="Back to Menu"
             title="Back to Menu"
-            className="h-10 w-10 rounded-xl text-[#1F2937] hover:bg-[#F7F9FA] flex items-center justify-center transition-colors cursor-pointer -ml-2"
+            className="h-10 w-10 rounded-full text-[#1F2937] hover:bg-[#F7F9FA] flex items-center justify-center transition-colors cursor-pointer -ml-2"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -319,7 +319,7 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
                       type="button"
                       onClick={handleSimulatePayment}
                       disabled={isSimulatingPayment}
-                      className="w-full h-10 rounded-xl bg-white hover:bg-emerald-50 text-[#00A86B] border border-emerald-300 font-bold text-[12px] flex items-center justify-center gap-1.5 shadow-2xs transition-colors cursor-pointer disabled:opacity-60 active:scale-98"
+                      className="w-full h-10 rounded-full bg-white hover:bg-emerald-50 text-[#00A86B] border border-emerald-300 font-bold text-[12px] flex items-center justify-center gap-1.5 shadow-2xs transition-colors cursor-pointer disabled:opacity-60 active:scale-98"
                     >
                       {isSimulatingPayment ? (
                         <>
@@ -444,7 +444,7 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
           <button
             type="button"
             onClick={() => navigate("/")}
-            className="w-full h-11 rounded-xl bg-[#00A86B] hover:bg-[#008F5B] text-white font-bold text-[14px] leading-[20px] flex items-center justify-center shadow-xs transition-colors cursor-pointer active:scale-[0.99]"
+            className="w-full h-11 rounded-full bg-[#00A86B] hover:bg-[#008F5B] text-white font-bold text-[14px] leading-[20px] flex items-center justify-center shadow-xs transition-colors cursor-pointer active:scale-[0.99]"
           >
             Back to Menu
           </button>

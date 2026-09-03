@@ -38,7 +38,7 @@ export const HomeBottomNavigation: React.FC<HomeBottomNavigationProps> = ({
           type="button"
           onClick={onOpenTicket}
           aria-label={activeOrder ? `Order #${activeOrder.orderNumber}` : "Order Ticket"}
-          className="flex-1 h-11 rounded-xl bg-[#00A86B] hover:bg-[#008F5B] text-white flex items-center justify-center gap-2 font-bold text-[15px] leading-[20px] shadow-xs transition-colors cursor-pointer active:scale-[0.99]"
+          className="flex-1 h-11 rounded-full bg-[#00A86B] hover:bg-[#008F5B] text-white flex items-center justify-center gap-2 font-bold text-[15px] leading-[20px] shadow-xs transition-colors cursor-pointer active:scale-[0.99]"
         >
           <Ticket className="h-4 w-4" />
           <span className="font-mono tracking-tight">
@@ -52,7 +52,7 @@ export const HomeBottomNavigation: React.FC<HomeBottomNavigationProps> = ({
           onClick={onOpenCart}
           aria-label={`My Cart (${cartCount} items)`}
           title="My Cart"
-          className={`relative h-11 w-11 rounded-xl bg-[#00A86B] hover:bg-[#008F5B] text-white shadow-xs flex items-center justify-center transition-all cursor-pointer shrink-0 active:scale-95 ${
+          className={`relative h-11 w-11 rounded-full bg-[#00A86B] hover:bg-[#008F5B] text-white shadow-xs flex items-center justify-center transition-all cursor-pointer shrink-0 active:scale-95 ${
             bounce ? "scale-105" : ""
           }`}
         >

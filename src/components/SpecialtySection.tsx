@@ -56,12 +56,12 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
         <div className="flex items-center gap-2">
           {/* Layout Toggle (2-Col Grid vs 1-Col List) */}
           {onToggleViewMode && (
-            <div className="flex items-center bg-stone-100 p-0.5 rounded-xl border border-[#E5E7EB]">
+            <div className="flex items-center bg-stone-100 p-0.5 rounded-full border border-[#E5E7EB]">
               <button
                 type="button"
                 onClick={onToggleViewMode}
                 aria-label="List View"
-                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                className={`p-1.5 rounded-full transition-colors cursor-pointer ${
                   !isGrid
                     ? "bg-white text-[#00A86B] shadow-xs"
                     : "text-[#6B7280] hover:text-[#1F2937]"
@@ -73,7 +73,7 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
                 type="button"
                 onClick={onToggleViewMode}
                 aria-label="2-Column Grid View"
-                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                className={`p-1.5 rounded-full transition-colors cursor-pointer ${
                   isGrid
                     ? "bg-white text-[#00A86B] shadow-xs"
                     : "text-[#6B7280] hover:text-[#1F2937]"

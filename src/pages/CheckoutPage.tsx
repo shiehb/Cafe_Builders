@@ -36,7 +36,7 @@ export const CheckoutPage: React.FC = () => {
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="px-4 py-2 rounded-xl bg-[#00A86B] text-white text-[12px] font-bold hover:bg-[#008F5B] transition-colors cursor-pointer inline-flex items-center gap-1.5"
+          className="px-5 py-2 rounded-full bg-[#00A86B] text-white text-[12px] font-bold hover:bg-[#008F5B] transition-colors cursor-pointer inline-flex items-center gap-1.5"
         >
           <ArrowLeft className="h-4 w-4" />
           <span>Back to Menu</span>
@@ -112,7 +112,7 @@ export const CheckoutPage: React.FC = () => {
             onClick={() => navigate("/cart")}
             aria-label="Back to Cart"
             title="Back to Cart"
-            className="h-10 w-10 rounded-xl text-[#1F2937] hover:bg-[#F7F9FA] flex items-center justify-center transition-colors cursor-pointer -ml-2"
+            className="h-10 w-10 rounded-full text-[#1F2937] hover:bg-[#F7F9FA] flex items-center justify-center transition-colors cursor-pointer -ml-2"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -226,7 +226,7 @@ export const CheckoutPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setOrderType("DINE_IN")}
-                className={`p-3 rounded-xl border text-[12px] font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                className={`p-3 rounded-full border text-[12px] font-semibold transition-all flex items-center justify-between cursor-pointer ${
                   orderType === "DINE_IN"
                     ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
                     : "border-[#E5E7EB] bg-white text-[#1F2937] hover:bg-[#F7F9FA]"
@@ -239,7 +239,7 @@ export const CheckoutPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setOrderType("TAKEAWAY")}
-                className={`p-3 rounded-xl border text-[12px] font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                className={`p-3 rounded-full border text-[12px] font-semibold transition-all flex items-center justify-between cursor-pointer ${
                   orderType === "TAKEAWAY"
                     ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
                     : "border-[#E5E7EB] bg-white text-[#1F2937] hover:bg-[#F7F9FA]"
@@ -262,14 +262,14 @@ export const CheckoutPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setPaymentOption("QRPH")}
-                className={`w-full p-3.5 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                className={`w-full p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all cursor-pointer ${
                   paymentOption === "QRPH"
                     ? "border-[#00A86B] bg-[#E6F6F0] shadow-xs"
                     : "border-[#E5E7EB] bg-white hover:bg-[#F7F9FA]"
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-lg bg-emerald-100 text-[#00A86B] flex items-center justify-center font-bold text-[14px]">
+                  <div className="h-9 w-9 rounded-full bg-emerald-100 text-[#00A86B] flex items-center justify-center font-bold text-[14px]">
                     <QrCode className="h-5 w-5" />
                   </div>
                   <div>
@@ -296,14 +296,14 @@ export const CheckoutPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setPaymentOption("CASH")}
-                className={`w-full p-3.5 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                className={`w-full p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all cursor-pointer ${
                   paymentOption === "CASH"
                     ? "border-[#00A86B] bg-[#E6F6F0] shadow-xs"
                     : "border-[#E5E7EB] bg-white hover:bg-[#F7F9FA]"
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-[14px]">
+                  <div className="h-9 w-9 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-[14px]">
                     <Banknote className="h-5 w-5" />
                   </div>
                   <div>
@@ -353,7 +353,7 @@ export const CheckoutPage: React.FC = () => {
             type="submit"
             form="checkout-form"
             disabled={isSubmitting}
-            className="w-full h-11 rounded-xl bg-[#00A86B] hover:bg-[#008F5B] text-white font-bold text-[14px] leading-[20px] flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer active:scale-[0.99] disabled:opacity-60"
+            className="w-full h-11 rounded-full bg-[#00A86B] hover:bg-[#008F5B] text-white font-bold text-[14px] leading-[20px] flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer active:scale-[0.99] disabled:opacity-60"
           >
             {isSubmitting ? (
               <>

@@ -97,7 +97,7 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="px-4 py-2 rounded-xl bg-[#00A86B] text-white text-[12px] font-bold hover:bg-[#008F5B] transition-colors cursor-pointer inline-flex items-center gap-1.5"
+          className="px-5 py-2 rounded-full bg-[#00A86B] text-white text-[12px] font-bold hover:bg-[#008F5B] transition-colors cursor-pointer inline-flex items-center gap-1.5"
         >
           <ArrowLeft className="h-4 w-4" />
           <span>Back to Menu</span>
@@ -148,7 +148,7 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
             onClick={() => navigate("/")}
             aria-label="Back to Menu"
             title="Back to Menu"
-            className="h-10 w-10 rounded-xl text-[#1F2937] hover:bg-[#F7F9FA] flex items-center justify-center transition-colors cursor-pointer -ml-2"
+            className="h-10 w-10 rounded-full text-[#1F2937] hover:bg-[#F7F9FA] flex items-center justify-center transition-colors cursor-pointer -ml-2"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -210,7 +210,7 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
             <button
               type="button"
               onClick={() => navigate("/")}
-              className="mt-3 px-4 py-2 rounded-xl bg-[#00A86B] text-white text-[12px] font-bold cursor-pointer hover:bg-[#008F5B]"
+              className="mt-3 px-5 py-2 rounded-full bg-[#00A86B] text-white text-[12px] font-bold cursor-pointer hover:bg-[#008F5B]"
             >
               Back to Menu
             </button>
@@ -233,7 +233,7 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
                       key={opt}
                       type="button"
                       onClick={() => setTemperature(opt)}
-                      className={`h-11 rounded-xl border text-[12px] font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      className={`h-11 rounded-full border text-[12px] font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                         isSelected
                           ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
                           : "border-[#E5E7EB] bg-white text-[#1F2937] hover:bg-[#F7F9FA]"
@@ -264,7 +264,7 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
                         key={ice}
                         type="button"
                         onClick={() => setIceLevel(ice)}
-                        className={`h-10 rounded-xl border text-center text-[12px] font-semibold transition-all cursor-pointer ${
+                        className={`h-10 rounded-full border text-center text-[12px] font-semibold transition-all cursor-pointer ${
                           isSelected
                             ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
                             : "border-[#E5E7EB] bg-white text-[#1F2937] hover:bg-[#F7F9FA]"
@@ -294,7 +294,7 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
                       key={opt}
                       type="button"
                       onClick={() => setSweetness(opt)}
-                      className={`h-10 rounded-xl border text-center text-[12px] font-semibold transition-all cursor-pointer ${
+                      className={`h-10 rounded-full border text-center text-[12px] font-semibold transition-all cursor-pointer ${
                         isSelected
                           ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
                           : "border-[#E5E7EB] bg-white text-[#1F2937] hover:bg-[#F7F9FA]"
@@ -324,7 +324,7 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
                         key={milk.label}
                         type="button"
                         onClick={() => setSelectedMilk(milk)}
-                        className={`p-2.5 rounded-xl border text-[12px] font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                        className={`p-2.5 rounded-full border text-[12px] font-semibold transition-all flex items-center justify-between px-4 cursor-pointer ${
                           isSelected
                             ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
                             : "border-[#E5E7EB] bg-white text-[#1F2937] hover:bg-[#F7F9FA]"
@@ -357,7 +357,7 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
                       key={addon.label}
                       type="button"
                       onClick={() => toggleAddon(addon)}
-                      className={`p-2.5 rounded-xl border text-[12px] font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                      className={`p-2.5 rounded-full border text-[12px] font-semibold transition-all flex items-center justify-between px-4 cursor-pointer ${
                         isChecked
                           ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
                           : "border-[#E5E7EB] bg-white text-[#1F2937] hover:bg-[#F7F9FA]"
@@ -365,7 +365,7 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
                     >
                       <div className="flex items-center gap-2">
                         <div
-                          className={`h-4 w-4 rounded-md border flex items-center justify-center ${
+                          className={`h-4 w-4 rounded-full border flex items-center justify-center ${
                             isChecked
                               ? "border-[#00A86B] bg-[#00A86B] text-white"
                               : "border-[#E5E7EB] bg-white"
@@ -392,7 +392,7 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
                 value={specialInstructions}
                 onChange={(e) => setSpecialInstructions(e.target.value)}
                 placeholder="e.g. Extra hot, separate lid, extra straw..."
-                className="w-full p-3 rounded-xl border border-[#E5E7EB] bg-[#F7F9FA] text-[12px] text-[#1F2937] focus:bg-white focus:outline-none focus:border-[#00A86B] transition-all resize-none"
+                className="w-full p-3 rounded-2xl border border-[#E5E7EB] bg-[#F7F9FA] text-[12px] text-[#1F2937] focus:bg-white focus:outline-none focus:border-[#00A86B] transition-all resize-none"
               />
             </div>
           </div>
@@ -404,12 +404,12 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
         <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-[#E5E7EB] p-3 sm:p-4 shadow-footer">
           <div className="max-w-2xl mx-auto flex items-center gap-3">
             {/* Quantity Stepper: (- 1 +) */}
-            <div className="flex items-center border border-[#E5E7EB] bg-[#F7F9FA] rounded-xl p-1 shrink-0">
+            <div className="flex items-center border border-[#E5E7EB] bg-[#F7F9FA] rounded-full p-1 shrink-0">
               <button
                 type="button"
                 onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                 aria-label="Decrease quantity"
-                className="h-9 w-9 rounded-lg flex items-center justify-center text-[#1F2937] hover:bg-white hover:shadow-xs transition-all cursor-pointer"
+                className="h-9 w-9 rounded-full flex items-center justify-center text-[#1F2937] hover:bg-white hover:shadow-xs transition-all cursor-pointer"
               >
                 <Minus className="h-4 w-4" />
               </button>
@@ -420,7 +420,7 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
                 type="button"
                 onClick={() => setQuantity((q) => q + 1)}
                 aria-label="Increase quantity"
-                className="h-9 w-9 rounded-lg flex items-center justify-center text-[#1F2937] hover:bg-white hover:shadow-xs transition-all cursor-pointer"
+                className="h-9 w-9 rounded-full flex items-center justify-center text-[#1F2937] hover:bg-white hover:shadow-xs transition-all cursor-pointer"
               >
                 <Plus className="h-4 w-4" />
               </button>
@@ -430,7 +430,7 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
             <button
               type="button"
               onClick={handleAdd}
-              className="flex-1 h-11 rounded-xl bg-[#00A86B] hover:bg-[#008F5B] text-white font-bold text-[14px] leading-[20px] flex items-center justify-center shadow-xs transition-colors cursor-pointer active:scale-[0.99]"
+              className="flex-1 h-11 rounded-full bg-[#00A86B] hover:bg-[#008F5B] text-white font-bold text-[14px] leading-[20px] flex items-center justify-center shadow-xs transition-colors cursor-pointer active:scale-[0.99]"
             >
               Add to Cart - {formatPrice(lineTotal)}
             </button>

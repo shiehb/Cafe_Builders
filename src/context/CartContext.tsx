@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { CartItem, Product, ItemCustomization, Order, OrderType } from "../types";
+import { PRODUCTS } from "../data/menuData";
 
 const LOCAL_STORAGE_CART_KEY = "cafe_customer_cart_v2";
 const LOCAL_STORAGE_ORDERS_KEY = "cafe_orders_history";
@@ -49,28 +50,37 @@ const getCustomizationSig = (prodId: string, cust: ItemCustomization) => {
 };
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // 1. Cart state with ID sanitization
+  // 1. Cart state with ID sanitization & robust product resolution
   const [cart, setCart] = useState<CartItem[]>(() => {
     try {
-      const stored = localStorage.getItem(LOCAL_STORAGE_CART_KEY);
+      const stored =
+        localStorage.getItem(LOCAL_STORAGE_CART_KEY) ||
+        localStorage.getItem("cafe_customer_cart") ||
+        localStorage.getItem("cafe_cart");
       if (!stored) return [];
       const parsed = JSON.parse(stored);
       if (!Array.isArray(parsed)) return [];
       return parsed.map((item, idx) => {
-        // Ensure every item has a clean, URL-safe alphanumeric ID
-        if (
-          !item.id ||
-          item.id.includes(" ") ||
-          item.id.includes("+") ||
-          item.id.includes("₱") ||
-          item.id.includes("%")
-        ) {
-          return {
-            ...item,
-            id: generateCartItemId(`item_${idx}`),
+        const product =
+          item.product ||
+          PRODUCTS.find((p) => p.id === item.productId) || {
+            id: item.productId || `prod_${idx}`,
+            name: item.name || "Handcrafted Beverage",
+            price: item.unitPrice || 0,
+            description: "",
+            imageUrl: "https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&q=80&w=600",
+            categoryId: "all",
+            isAvailable: true,
           };
-        }
-        return item;
+
+        const id = item.id ? String(item.id).trim() : generateCartItemId(`item_${idx}`);
+
+        return {
+          ...item,
+          id,
+          productId: product.id || item.productId,
+          product,
+        };
       });
     } catch {
       return [];

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Search, X } from "lucide-react";
+import { cn } from "../lib/utils";
 
 interface NavbarProps {
   onOpenCart?: () => void;
@@ -9,11 +10,13 @@ interface NavbarProps {
   cartTotal?: number;
   searchQuery?: string;
   onSearchChange?: (val: string) => void;
+  isCategoryStuck?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   searchQuery = "",
   onSearchChange,
+  isCategoryStuck = false,
 }) => {
   const [isSearchExpanded, setIsSearchExpanded] = useState<boolean>(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -25,15 +28,22 @@ export const Navbar: React.FC<NavbarProps> = ({
   }, [isSearchExpanded]);
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E5E7EB] shadow-xs">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
+    <header
+      className={cn(
+        "sticky top-0 z-40 h-14 bg-white/95 backdrop-blur-md transition-all duration-150",
+        isCategoryStuck
+          ? "border-b border-transparent shadow-none"
+          : "border-b border-[#E5E7EB] shadow-xs"
+      )}
+    >
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 h-full flex items-center justify-between gap-3">
         {/* Left: Brand Logo + Name ("Artisan Brew & Kitchen") */}
         <div
           className={`flex items-center gap-2.5 shrink-0 transition-opacity duration-200 ${
             isSearchExpanded ? "hidden xs:flex" : "flex"
           }`}
         >
-          <div className="h-8 w-8 rounded-xl bg-[#00A86B] flex items-center justify-center text-white shadow-xs font-bold text-sm">
+          <div className="h-8 w-8 rounded-full bg-[#00A86B] flex items-center justify-center text-white shadow-xs font-bold text-sm">
             ☕
           </div>
           <span className="font-bold text-[16px] leading-[24px] tracking-tight text-[#1F2937]">
@@ -53,7 +63,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   value={searchQuery}
                   onChange={(e) => onSearchChange?.(e.target.value)}
                   placeholder="Search coffee, pastries, pasta..."
-                  className="w-full bg-[#F7F9FA] border border-[#E5E7EB] rounded-xl pl-9 pr-8 py-2 text-[12px] leading-[18px] text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#00A86B] focus:border-transparent transition-all"
+                  className="w-full bg-[#F7F9FA] border border-[#E5E7EB] rounded-full pl-9 pr-8 py-2 text-[12px] leading-[18px] text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#00A86B] focus:border-transparent transition-all"
                 />
                 {searchQuery && (
                   <button
@@ -74,7 +84,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   onSearchChange?.("");
                 }}
                 aria-label="Close search"
-                className="h-8 w-8 rounded-xl bg-stone-100 hover:bg-stone-200 text-[#6B7280] flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                className="h-8 w-8 rounded-full bg-stone-100 hover:bg-stone-200 text-[#6B7280] flex items-center justify-center transition-colors cursor-pointer shrink-0"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -85,7 +95,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => setIsSearchExpanded(true)}
               aria-label="Search Menu"
               title="Search Menu"
-              className="h-9 w-9 rounded-xl bg-[#F7F9FA] hover:bg-stone-100 border border-[#E5E7EB] text-[#1F2937] flex items-center justify-center transition-colors cursor-pointer"
+              className="h-9 w-9 rounded-full bg-[#F7F9FA] hover:bg-stone-100 border border-[#E5E7EB] text-[#1F2937] flex items-center justify-center transition-colors cursor-pointer"
             >
               <Search className="h-4 w-4" />
             </button>

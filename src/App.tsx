@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Category, Product, ItemCustomization } from "./types";
 import { CATEGORIES, PRODUCTS } from "./data/menuData";
 import { Navbar } from "./components/Navbar";
@@ -10,6 +10,7 @@ import { HomeBottomNavigation } from "./components/HomeBottomNavigation";
 import { useProductInventoryRealtime } from "./lib/realtime";
 import { useParsedRoute, navigate } from "./lib/router";
 import { CartProvider, useCart } from "./context/CartContext";
+import { cn } from "./lib/utils";
 
 // Standalone Full Pages
 import { KdsPage } from "./pages/KdsPage";
@@ -68,6 +69,21 @@ function CustomerApp() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isGridView, setIsGridView] = useState<boolean>(false);
+  const [isCategoryStuck, setIsCategoryStuck] = useState<boolean>(false);
+  const categorySentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!categorySentinelRef.current) return;
+      const rect = categorySentinelRef.current.getBoundingClientRect();
+      // Navbar header is exactly 56px (h-14) high.
+      setIsCategoryStuck(rect.top <= 56.5);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [selectedCategory, searchQuery]);
 
   // Global Realtime listener for live product inventory & availability updates
   useProductInventoryRealtime((updatedProduct: Product) => {
@@ -147,42 +163,56 @@ function CustomerApp() {
       <Navbar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        isCategoryStuck={isCategoryStuck}
       />
 
-      {/* Pinned Category Bar (Fixed below header) */}
-      <div className="sticky top-14 z-30 bg-white/95 backdrop-blur-md border-b border-[#E5E7EB] py-2 px-4 sm:px-6 shadow-xs">
-        <div className="max-w-3xl mx-auto">
-          <CategoryNav
-            categories={categories}
-            selectedCategoryId={selectedCategory}
-            onSelectCategory={(id) => {
-              setSelectedCategory(id);
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Main Scrollable Content */}
-      <main className="max-w-3xl w-full mx-auto px-0 sm:px-4 py-4 space-y-5">
-        {/* Section 1: Hero Banner Carousel displaying "New & Seasonal Products" */}
-        {selectedCategory === "all" && !searchQuery && (
+      {/* Top Carousel Sections: Hero Banner & Popular Items (Visible on "All" view) */}
+      {selectedCategory === "all" && !searchQuery && (
+        <div className="max-w-3xl w-full mx-auto px-0 sm:px-4 pt-3 pb-3 space-y-5">
+          {/* Section 1: Hero Banner Carousel displaying "New & Seasonal Products" */}
           <SeasonalHeroCarousel
             products={products}
             onSelectProduct={(p) => navigate(`/item/${p.id}`)}
           />
-        )}
 
-        {/* Section 2: "Popular" horizontal card scroll */}
-        {selectedCategory === "all" && !searchQuery && (
+          {/* Section 2: "Popular" horizontal card scroll */}
           <MostPopularCarousel
             products={products}
             onSelectProduct={(p) => navigate(`/item/${p.id}`)}
             onQuickAdd={handleQuickAdd}
           />
-        )}
+        </div>
+      )}
 
-        {/* Section 3: "All Items" list view */}
-        <div id="all-items-section" className="pt-0.5">
+      {/* Sentinel to accurately detect when Category bar touches the header */}
+      <div ref={categorySentinelRef} className="h-0 w-full pointer-events-none" />
+
+      {/* Category Bar: Positioned on top of All Items, sticks seamlessly under heading on scroll */}
+      <div
+        className={cn(
+          "sticky z-30 w-full bg-white/95 backdrop-blur-md py-2.5 transition-all duration-150",
+          isCategoryStuck
+            ? "top-[55px] border-t-0 border-b border-[#E5E7EB] shadow-xs"
+            : "top-14 border-y border-[#E5E7EB]/80"
+        )}
+      >
+        <div className="max-w-3xl mx-auto px-4 sm:px-6">
+          <CategoryNav
+            categories={categories}
+            selectedCategoryId={selectedCategory}
+            onSelectCategory={(id) => {
+              setSelectedCategory(id);
+              if (isCategoryStuck || id !== "all") {
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Main Scrollable Content: All Items */}
+      <main className="max-w-3xl w-full mx-auto px-0 sm:px-4 py-3">
+        <div id="all-items-section">
           <SpecialtySection
             title={selectedCategory === "all" ? "All Items" : sectionTitle}
             products={filteredProducts}
