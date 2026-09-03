@@ -94,7 +94,6 @@ export async function seedDatabaseIfEmpty(): Promise<boolean> {
               categoryId: prod.categoryId,
               isAvailable: prod.isAvailable,
               popular: !!prod.popular,
-              temperature: prod.temperatureOptions?.join("/") || "BOTH",
             },
           });
         }

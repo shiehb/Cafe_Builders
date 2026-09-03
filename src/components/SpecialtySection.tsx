@@ -179,7 +179,6 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         if (
-                          product.temperatureOptions ||
                           product.sweetnessAdjustable ||
                           product.milkOptionsAvailable
                         ) {
@@ -255,7 +254,6 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       if (
-                        product.temperatureOptions ||
                         product.sweetnessAdjustable ||
                         product.milkOptionsAvailable
                       ) {

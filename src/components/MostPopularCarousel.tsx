@@ -102,7 +102,6 @@ export const MostPopularCarousel: React.FC<MostPopularCarouselProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       if (
-                        product.temperatureOptions ||
                         product.sweetnessAdjustable ||
                         product.milkOptionsAvailable
                       ) {

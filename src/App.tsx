@@ -144,7 +144,7 @@ function CustomerApp() {
       return;
     }
     const defaultCustomization: ItemCustomization = {
-      iceLevel: product.temperatureOptions?.includes("Iced") ? "Less Ice" : undefined,
+      iceLevel: true ? "Less Ice" : undefined,
       sweetness: product.sweetnessAdjustable ? "Regular Sweetness" : undefined,
     };
     addToCart(product, 1, defaultCustomization, 0);

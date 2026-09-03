@@ -41,8 +41,8 @@ export const CartPage: React.FC = () => {
   const formatCustomizationBullet = (item: CartItem): string => {
     const parts: string[] = [];
     if (item.customizations?.size) parts.push(item.customizations.size);
-    if (item.customizations?.temperature && !item.customizations?.size) {
-      parts.push(item.customizations.temperature);
+    if (item.customizations?.servingPreference && !item.customizations?.size) {
+      parts.push(item.customizations.servingPreference);
     }
     if (item.customizations?.sweetness) parts.push(item.customizations.sweetness);
     if (item.customizations?.iceLevel) parts.push(item.customizations.iceLevel);

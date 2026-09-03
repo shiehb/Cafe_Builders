@@ -271,6 +271,29 @@ app.get("/api/products/:id", (req, res) => {
   res.json({ product });
 });
 
+// Canonical catalog contract consumed by Customer and POS. The current in-memory
+// catalog is normalized here so both clients receive the same availability shape.
+app.get("/api/catalog", (req, res) => {
+  const availableOnly = req.query.availableOnly === "true";
+  const data = Array.from(productsStore.values())
+    .filter((product) => !availableOnly || product.isAvailable)
+    .map((product) => ({
+      ...product,
+      basePrice: product.price,
+      productType: product.categoryName?.toLowerCase().includes("food") || product.categoryName?.toLowerCase().includes("pastr") ? "FOOD" : "BEVERAGE",
+      categories: [{ id: product.categoryId, name: product.categoryName || product.categoryId }],
+      customizationGroups: (product.enabledCustomizationGroups || []).map((group) => ({
+        id: `group_${group}`,
+        name: group === "ice" ? "Ice Level" : group === "sugar" ? "Sugar Level" : group === "milk" ? "Milk Choices" : "Add-ons",
+        selectionMode: group === "addons" ? "MULTIPLE" : "SINGLE",
+        required: group !== "addons",
+        options: group === "milk" ? product.milkOptions || [] : group === "addons" ? product.addonOptions || [] : [],
+      })),
+      availabilityReason: product.isAvailable ? null : "MANUAL_UNAVAILABLE",
+    }));
+  res.json({ data });
+});
+
 // ==============================================================================
 // PROTECTED ADMIN INVENTORY & PRODUCT MANAGEMENT ENDPOINTS
 // Enforced by expressAdminAuthMiddleware (Valid HttpOnly admin_session required)
@@ -318,7 +341,6 @@ app.post("/api/admin/products", async (req, res) => {
       imageUrl,
       popular = false,
       isAvailable = true,
-      temperatureOptions = ["Hot", "Iced"],
       sweetnessAdjustable = true,
       enabledCustomizationGroups,
       milkOptions,
@@ -348,7 +370,6 @@ app.post("/api/admin/products", async (req, res) => {
       imageUrl: imageUrl?.trim() || "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=600&auto=format&fit=crop&q=80",
       popular: Boolean(popular),
       isAvailable: isAvailable !== false,
-      temperatureOptions: Array.isArray(temperatureOptions) && temperatureOptions.length > 0 ? temperatureOptions : ["Hot", "Iced"],
       sweetnessAdjustable: sweetnessAdjustable !== false,
       enabledCustomizationGroups: Array.isArray(enabledCustomizationGroups) ? enabledCustomizationGroups : undefined,
       milkOptions: Array.isArray(milkOptions) ? milkOptions : undefined,
@@ -516,7 +537,10 @@ app.post("/api/checkout", async (req, res) => {
       .filter(({ product }) => !product || product.isAvailable === false);
     if (unavailable.length > 0) {
       return res.status(409).json({
+        success: false,
+        code: "PRODUCT_UNAVAILABLE",
         error: `Unavailable item: ${unavailable[0].item.productName || "This product"}. Please remove it or choose a replacement.`,
+        message: `Unavailable item: ${unavailable[0].item.productName || "This product"}. Please remove it or choose a replacement.`,
         unavailableProductIds: unavailable.map(({ item }) => item.productId),
       });
     }

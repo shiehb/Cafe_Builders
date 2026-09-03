@@ -7,7 +7,7 @@ import { navigate } from "../lib/router";
 import { useCart } from "../context/CartContext";
 
 const SUGAR_LEVELS = ["0%", "25%", "50%", "75%", "100%"] as const;
-const ICE_LEVELS = ["No Ice", "Less", "Normal", "Extra"] as const;
+const ICE_LEVELS = ["Less", "Regular", "Extra"] as const;
 
 const MILK_OPTIONS = [
   { label: "Whole Fresh Milk", price: 0 },
@@ -79,7 +79,6 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
 
   // Customization States
   const [quantity, setQuantity] = useState<number>(1);
-  const [temperature, setTemperature] = useState<"Hot" | "Iced">("Iced");
   const [iceLevel, setIceLevel] = useState<string>("Normal");
   const [sweetness, setSweetness] = useState<string>("50%");
   const [foodWarming, setFoodWarming] = useState<string>("Warmed Up");
@@ -122,14 +121,6 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
     };
   }, [productId]);
 
-  useEffect(() => {
-    if (product?.temperatureOptions?.includes("Hot") && !product?.temperatureOptions?.includes("Iced")) {
-      setTemperature("Hot");
-    } else {
-      setTemperature("Iced");
-    }
-  }, [product]);
-
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F7F9FA] flex items-center justify-center p-4">
@@ -169,7 +160,7 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
       ? configuredGroups.includes(group)
       : isFood
         ? group === "addons"
-        : group !== "ice" || product.temperatureOptions?.includes("Iced") !== false;
+        : group !== "ice";
   const milkOptions = product.milkOptions?.length ? product.milkOptions : DEFAULT_MILK_OPTIONS;
   const beverageAddons = product.addonOptions?.length ? product.addonOptions : DEFAULT_BEVERAGE_ADDONS;
 
@@ -193,7 +184,7 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
 
     const customizations: ItemCustomization = isFood
       ? {
-          temperature: foodWarming,
+          servingPreference: foodWarming,
           addOns: hasGroup("addons") ? selectedAddons.map((a) => `${a.label} (+${formatPrice(a.price)})`) : [],
           specialInstructions: specialInstructions.trim() || undefined,
         }

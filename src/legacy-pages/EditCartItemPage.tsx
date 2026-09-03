@@ -8,7 +8,7 @@ import { PRODUCTS } from "../data/menuData";
 import { isFoodCategory } from "./ItemCustomizationPage";
 
 const SUGAR_LEVELS = ["0%", "25%", "50%", "75%", "100%"] as const;
-const ICE_LEVELS = ["No Ice", "Less", "Normal", "Extra"] as const;
+const ICE_LEVELS = ["Less", "Regular", "Extra"] as const;
 
 const MILK_OPTIONS = [
   { label: "Whole Fresh Milk", price: 0 },
@@ -82,14 +82,9 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
 
   // Customization States
   const [quantity, setQuantity] = useState<number>(() => cartItem?.quantity || 1);
-  const [temperature, setTemperature] = useState<"Hot" | "Iced">(() => {
-    if (cartItem?.customizations?.temperature === "Hot") return "Hot";
-    return "Iced";
-  });
-
   const [iceLevel, setIceLevel] = useState<string>(() => {
     const raw = cartItem?.customizations?.iceLevel || "";
-    if (raw.includes("No")) return "No Ice";
+    if (raw.includes("No")) return "Less";
     if (raw.includes("Less")) return "Less";
     if (raw.includes("Extra")) return "Extra";
     return "Normal";
@@ -108,7 +103,7 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
   });
 
   const [foodWarming, setFoodWarming] = useState<string>(() => {
-    return cartItem?.customizations?.temperature?.includes("Room")
+    return cartItem?.customizations?.servingPreference?.includes("Room")
       ? "Room Temp"
       : "Warmed Up";
   });
@@ -138,9 +133,8 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
     if (cartItem) {
       setQuantity(cartItem.quantity);
       if (cartItem.customizations?.iceLevel) {
-        setTemperature("Iced");
         const raw = cartItem.customizations.iceLevel;
-        if (raw.includes("No")) setIceLevel("No Ice");
+        if (raw.includes("No")) setIceLevel("Less");
         else if (raw.includes("Less")) setIceLevel("Less");
         else if (raw.includes("Extra")) setIceLevel("Extra");
         else setIceLevel("Normal");
@@ -201,13 +195,12 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
     if (!cartItem) return;
     const updatedCustomizations: ItemCustomization = isFood
       ? {
-          temperature: foodWarming,
+          servingPreference: foodWarming,
           addOns: selectedAddons.map((a) => `${a.label} (+${formatPrice(a.price)})`),
           specialInstructions: specialInstructions.trim() || undefined,
         }
       : {
-          temperature: product.temperatureOptions && product.temperatureOptions.length > 1 ? temperature : undefined,
-          iceLevel: temperature === "Iced" ? iceLevel : undefined,
+          iceLevel,
           sweetness: sweetness ? `${sweetness} Sugar` : undefined,
           milkOption: product.milkOptionsAvailable ? selectedMilk.label : undefined,
           addOns: selectedAddons.map((a) => `${a.label} (+${formatPrice(a.price)})`),
@@ -351,36 +344,6 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
           ) : (
             /* ===== BEVERAGE OPTIONS ===== */
             <>
-              {/* Temperature */}
-              {product.temperatureOptions && product.temperatureOptions.length > 1 && (
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-[15px] font-bold text-[#1F2937]">Temperature</h2>
-                    <span className="text-[11px] text-[#6B7280]">Select 1</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {(["Iced", "Hot"] as const).map((opt) => {
-                      const isSelected = temperature === opt;
-                      return (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() => setTemperature(opt)}
-                          className={`h-11 rounded-2xl border text-[13px] font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                            isSelected
-                              ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
-                              : "border-[#E5E7EB] bg-[#F7F9FA] text-[#1F2937] hover:bg-stone-100"
-                          }`}
-                        >
-                          <span>{opt === "Iced" ? "🧊 Iced" : "♨️ Hot"}</span>
-                          {isSelected && <Check className="h-4 w-4 text-[#00A86B]" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
               {/* Sugar Level */}
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
@@ -409,7 +372,7 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
               </div>
 
               {/* Ice Level (only when Iced) */}
-              {temperature === "Iced" && (
+              {true && (
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
                     <h2 className="text-[15px] font-bold text-[#1F2937]">Ice Level</h2>

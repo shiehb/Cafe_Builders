@@ -52,7 +52,6 @@ model Product {
   category    Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   isAvailable Boolean     @default(true)
   popular     Boolean     @default(false)
-  temperature String?     // e.g., "HOT", "ICED", "BOTH"
   orderItems  OrderItem[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
@@ -91,7 +90,7 @@ model OrderItem {
   unitPrice      Float    // Price in PHP
   quantity       Int      @default(1)
   subtotal       Float    // (unitPrice * quantity) + addons
-  customizations Json?    // { temperature: "Iced", sweetness: "50%", addons: ["Oat Milk", "Extra Shot"] }
+  customizations Json?    // Structured group and option selections snapshot
   notes          String?
   createdAt      DateTime @default(now())
 

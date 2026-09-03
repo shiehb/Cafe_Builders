@@ -82,7 +82,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             quantity: 2,
             unitPrice: 4.80,
             customizations: {
-              temperature: "Warm",
+              servingPreference: "Warmed Up",
               addOns: ["Premium glaze spread"],
             },
             customizationsTotal: 0,

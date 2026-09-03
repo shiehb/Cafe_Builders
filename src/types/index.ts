@@ -18,9 +18,9 @@ export type CustomizationGroup = "ice" | "sugar" | "milk" | "addons";
 
 export interface ItemCustomization {
   size?: string;
-  iceLevel?: "Regular Ice" | "Less Ice" | "No Ice" | "Extra Ice" | "Normal Ice" | string;
+  iceLevel?: "Less" | "Regular" | "Extra" | string;
   sweetness?: "Regular Sweetness" | "Less Sweet" | "Light Sweet" | "No Sugar" | "100%" | "75%" | "50%" | "25%" | "0%" | "50% Sugar" | string;
-  temperature?: "Hot" | "Iced" | "Standard" | "Warm" | string;
+  servingPreference?: "Warmed Up" | "Room Temp" | string;
   milkOption?: string;
   addOns?: string[];
   specialInstructions?: string;
@@ -43,7 +43,6 @@ export interface Product {
   reviewCount?: number;
   prepTimeMinutes?: number;
   calories?: number;
-  temperatureOptions?: ("Hot" | "Iced")[];
   sweetnessAdjustable?: boolean;
   milkOptionsAvailable?: boolean;
   /** Explicit manager configuration; absent means legacy product defaults. */

@@ -36,8 +36,6 @@ const AdminProductNewContent: React.FC = () => {
   const [description, setDescription] = useState<string>("");
   const [imageUrl, setImageUrl] = useState<string>(PRESET_IMAGES[0].url);
   const [popular, setPopular] = useState<boolean>(false);
-  const [temperatureHot, setTemperatureHot] = useState<boolean>(true);
-  const [temperatureIced, setTemperatureIced] = useState<boolean>(true);
   const [sweetnessAdjustable, setSweetnessAdjustable] = useState<boolean>(true);
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -62,10 +60,6 @@ const AdminProductNewContent: React.FC = () => {
     setIsSubmitting(true);
     try {
       const selectedCategory = CATEGORIES.find((c) => c.id === categoryId);
-      const temperatureOptions: string[] = [];
-      if (temperatureHot) temperatureOptions.push("Hot");
-      if (temperatureIced) temperatureOptions.push("Iced");
-
       const res = await fetch("/api/admin/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -78,7 +72,6 @@ const AdminProductNewContent: React.FC = () => {
           imageUrl: imageUrl.trim(),
           popular,
           isAvailable: true,
-          temperatureOptions: temperatureOptions.length > 0 ? temperatureOptions : ["Hot", "Iced"],
           sweetnessAdjustable,
         }),
       });
@@ -284,31 +277,6 @@ const AdminProductNewContent: React.FC = () => {
                 onChange={(e) => setPopular(e.target.checked)}
                 className="h-5 w-5 rounded accent-[#00A86B] cursor-pointer"
               />
-            </div>
-
-            {/* Temperatures */}
-            <div className="p-3 rounded-2xl bg-stone-950 border border-stone-800 space-y-2">
-              <p className="text-xs font-bold text-stone-200">Available Temperatures</p>
-              <div className="flex items-center gap-6">
-                <label className="flex items-center gap-2 text-xs text-stone-300 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={temperatureHot}
-                    onChange={(e) => setTemperatureHot(e.target.checked)}
-                    className="rounded accent-[#00A86B]"
-                  />
-                  <span>Hot (♨️)</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs text-stone-300 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={temperatureIced}
-                    onChange={(e) => setTemperatureIced(e.target.checked)}
-                    className="rounded accent-[#00A86B]"
-                  />
-                  <span>Iced (🧊)</span>
-                </label>
-              </div>
             </div>
 
             {/* Sweetness */}
