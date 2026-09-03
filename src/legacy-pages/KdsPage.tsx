@@ -240,11 +240,11 @@ export function KdsPage() {
       title: "COMPLETED",
       shortTitle: "Completed",
       orders: completedOrders,
-      headerBg: "bg-stone-800 border-stone-700 text-stone-300",
-      pillBg: "bg-stone-800 text-stone-300 border-stone-700",
+      headerBg: "bg-[#F7F9FA] border-[#D1D5DB] text-[#374151]",
+      pillBg: "bg-[#F7F9FA] text-[#374151] border-[#D1D5DB]",
       dotColor: "bg-stone-500",
       emptyText: "No completed orders today",
-      columnBorder: "border-stone-800",
+      columnBorder: "border-[#E5E7EB]",
       icon: CheckCircle2,
     },
   ];
@@ -270,7 +270,7 @@ export function KdsPage() {
             type="button"
             onClick={fetchOrders}
             disabled={isLoading}
-            className="p-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-800 transition-all cursor-pointer"
+            className="p-2 rounded-xl bg-white hover:bg-[#F7F9FA] text-[#374151] border border-[#E5E7EB] transition-all cursor-pointer"
             title="Refresh order queue"
           >
             <RotateCcw className={cn("h-4 w-4", isLoading && "animate-spin text-[#00A86B]")} />
@@ -289,13 +289,13 @@ export function KdsPage() {
           )}
 
           {/* Sub-bar: Status metrics */}
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-stone-900/80 border border-stone-800/80 p-3 rounded-2xl text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white/80 border border-[#E5E7EB]/80 p-3 rounded-2xl text-xs">
             <div className="flex items-center gap-4 flex-wrap">
-              <span className="text-stone-400">
+              <span className="text-[#6B7280]">
                 Tickets in Queue:{" "}
                 <strong className="text-white font-mono text-sm">{orders.length}</strong>
               </span>
-              <span className="text-stone-500">|</span>
+              <span className="text-[#6B7280]">|</span>
               <span className="text-amber-400">
                 Pending: <strong className="font-mono">{pendingOrders.length}</strong>
               </span>
@@ -305,12 +305,12 @@ export function KdsPage() {
               <span className="text-sky-400">
                 Ready: <strong className="font-mono">{readyOrders.length}</strong>
               </span>
-              <span className="text-stone-400">
+              <span className="text-[#6B7280]">
                 Completed: <strong className="font-mono">{completedOrders.length}</strong>
               </span>
             </div>
 
-            <div className="flex items-center gap-2 text-stone-400 text-[11px]">
+            <div className="flex items-center gap-2 text-[#6B7280] text-[11px]">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>Realtime Connected</span>
             </div>
@@ -324,7 +324,7 @@ export function KdsPage() {
                 <div
                   key={col.id}
                   className={cn(
-                    "flex flex-col bg-stone-900/60 rounded-2xl border min-w-[280px] md:min-w-0 flex-1 shadow-sm backdrop-blur-xs",
+                    "flex flex-col bg-white/60 rounded-2xl border min-w-[280px] md:min-w-0 flex-1 shadow-sm backdrop-blur-xs",
                     col.columnBorder
                   )}
                 >
@@ -355,9 +355,9 @@ export function KdsPage() {
                   {/* Column Ticket Items */}
                   <div className="p-3 flex-1 overflow-y-auto space-y-3 max-h-[calc(85vh-160px)]">
                     {col.orders.length === 0 ? (
-                      <div className="py-14 px-3 text-center border border-dashed border-stone-800 rounded-xl my-2">
-                        <Inbox className="h-7 w-7 mx-auto text-stone-600 mb-1.5" />
-                        <p className="text-xs font-medium text-stone-500">{col.emptyText}</p>
+                      <div className="py-14 px-3 text-center border border-dashed border-[#E5E7EB] rounded-xl my-2">
+                        <Inbox className="h-7 w-7 mx-auto text-[#9CA3AF] mb-1.5" />
+                        <p className="text-xs font-medium text-[#6B7280]">{col.emptyText}</p>
                       </div>
                     ) : (
                       col.orders.map((order) => {
@@ -374,15 +374,15 @@ export function KdsPage() {
                               isReady
                                 ? "bg-sky-950/30 border-sky-600/50 ring-1 ring-sky-500/30"
                                 : isPreparing
-                                ? "bg-stone-900 border-emerald-500/50 ring-1 ring-emerald-500/30"
+                                ? "bg-white border-emerald-500/50 ring-1 ring-emerald-500/30"
                                 : isPending
-                                ? "bg-stone-900/90 border-amber-500/30"
-                                : "bg-stone-900/40 border-stone-800 opacity-85"
+                                ? "bg-white/90 border-amber-500/30"
+                                : "bg-white/40 border-[#E5E7EB] opacity-85"
                             )}
                           >
                             <div className="space-y-3">
                               {/* Header */}
-                              <div className="flex items-start justify-between pb-2 border-b border-stone-800 gap-2">
+                              <div className="flex items-start justify-between pb-2 border-b border-[#E5E7EB] gap-2">
                                 <div>
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <span className="font-mono font-black text-lg text-white tracking-tight">
@@ -390,9 +390,9 @@ export function KdsPage() {
                                     </span>
                                     <Badge status={order.status} className="scale-90 origin-left" />
                                   </div>
-                                  <p className="text-[11px] text-stone-400 mt-0.5 font-medium">
+                                  <p className="text-[11px] text-[#6B7280] mt-0.5 font-medium">
                                     {order.customerName || "Guest"} ·{" "}
-                                    <span className="font-semibold text-stone-300">
+                                    <span className="font-semibold text-[#374151]">
                                       {order.orderType === "DINE_IN" ? "Dine-in" : "Takeaway"}
                                     </span>
                                   </p>
@@ -402,16 +402,16 @@ export function KdsPage() {
                                   <span className="text-xs font-bold text-white font-display block">
                                     {formatPrice(order.totalAmount)}
                                   </span>
-                                  <span className="text-[10px] text-stone-400 block font-medium">
+                                  <span className="text-[10px] text-[#6B7280] block font-medium">
                                     {order.paymentMethod === "QRPH" ? "PayMongo QR Ph" : "Cash at Counter"}
                                   </span>
                                 </div>
                               </div>
 
                               {/* Elapsed Timer Banner */}
-                              <div className="flex items-center justify-between text-[11px] px-2 py-1 rounded-lg bg-stone-950/80 border border-stone-800/80">
-                                <span className="flex items-center gap-1 text-stone-400 font-medium">
-                                  <Clock className="h-3 w-3 text-stone-500" />
+                              <div className="flex items-center justify-between text-[11px] px-2 py-1 rounded-lg bg-white/80 border border-[#E5E7EB]/80">
+                                <span className="flex items-center gap-1 text-[#6B7280] font-medium">
+                                  <Clock className="h-3 w-3 text-[#6B7280]" />
                                   {formatDateTime(order.createdAt)}
                                 </span>
                                 <span
@@ -421,7 +421,7 @@ export function KdsPage() {
                                       ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
                                       : timerInfo.isWarning
                                       ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                                      : "bg-stone-800 text-stone-300"
+                                      : "bg-[#F7F9FA] text-[#374151]"
                                   )}
                                 >
                                   <Timer
@@ -436,7 +436,7 @@ export function KdsPage() {
 
                               {/* Checklist Items */}
                               <div className="space-y-1.5 text-xs">
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280]">
                                   Items ({order.items.length})
                                 </p>
                                 <div className="space-y-1">
@@ -451,7 +451,7 @@ export function KdsPage() {
                                           "p-2 rounded-lg border transition-all text-xs",
                                           isChecked
                                             ? "bg-emerald-950/20 border-emerald-800/40 opacity-70"
-                                            : "bg-stone-950/60 border-stone-800"
+                                            : "bg-white/60 border-[#E5E7EB]"
                                         )}
                                       >
                                         <div className="flex items-start gap-2">
@@ -462,7 +462,7 @@ export function KdsPage() {
                                               "mt-0.5 h-4 w-4 rounded flex items-center justify-center border transition-all shrink-0 cursor-pointer",
                                               isChecked
                                                 ? "bg-emerald-600 border-emerald-500 text-white"
-                                                : "bg-stone-900 border-stone-700 hover:border-emerald-500"
+                                                : "bg-white border-[#D1D5DB] hover:border-emerald-500"
                                             )}
                                             title={isChecked ? "Mark pending" : "Mark prepared"}
                                           >
@@ -472,8 +472,8 @@ export function KdsPage() {
                                           <div className="flex-1 min-w-0">
                                             <div
                                               className={cn(
-                                                "flex justify-between font-bold text-stone-200 leading-tight",
-                                                isChecked && "line-through text-stone-500 font-normal"
+                                                "flex justify-between font-bold text-[#1F2937] leading-tight",
+                                                isChecked && "line-through text-[#6B7280] font-normal"
                                               )}
                                             >
                                               <span className="truncate">
@@ -482,7 +482,7 @@ export function KdsPage() {
                                             </div>
 
                                             {item.customizations && (
-                                              <div className="text-[11px] text-stone-400 mt-1 flex flex-wrap gap-x-1 gap-y-0.5">
+                                              <div className="text-[11px] text-[#6B7280] mt-1 flex flex-wrap gap-x-1 gap-y-0.5">
                                                 {item.customizations.iceLevel && (
                                                   <span className="font-semibold text-emerald-400">
                                                     {item.customizations.iceLevel}
@@ -495,7 +495,7 @@ export function KdsPage() {
                                                   <span>· {item.customizations.milkOption}</span>
                                                 )}
                                                 {item.customizations.addOns && item.customizations.addOns.length > 0 && (
-                                                  <span className="text-stone-300">
+                                                  <span className="text-[#374151]">
                                                     · {item.customizations.addOns.join(", ")}
                                                   </span>
                                                 )}
@@ -524,7 +524,7 @@ export function KdsPage() {
                             </div>
 
                             {/* Ticket Action Button at Bottom */}
-                            <div className="mt-3 pt-2.5 border-t border-stone-800 flex flex-col gap-1.5">
+                            <div className="mt-3 pt-2.5 border-t border-[#E5E7EB] flex flex-col gap-1.5">
                               {order.status === "PENDING_PAYMENT" && (
                                 <div className="flex flex-col gap-1.5">
                                   {order.paymentMethod === "CASH" ? (
@@ -555,7 +555,7 @@ export function KdsPage() {
                                       <button
                                         type="button"
                                         onClick={() => handleUpdateStatus(order.id, "PREPARING")}
-                                        className="w-full py-1.5 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1"
+                                        className="w-full py-1.5 px-3 rounded-lg bg-[#F7F9FA] hover:bg-stone-700 text-[#374151] text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1"
                                       >
                                         <span>Manual Override & Brew</span>
                                       </button>
@@ -599,13 +599,13 @@ export function KdsPage() {
 
                               {order.status === "COMPLETED" && (
                                 <div className="flex items-center justify-between pt-0.5">
-                                  <span className="text-[11px] text-stone-400 font-semibold flex items-center gap-1">
+                                  <span className="text-[11px] text-[#6B7280] font-semibold flex items-center gap-1">
                                     <Check className="h-3 w-3 text-emerald-400" /> Served & Closed
                                   </span>
                                   <button
                                     type="button"
                                     onClick={() => handleUpdateStatus(order.id, "READY")}
-                                    className="text-[10px] text-stone-500 hover:text-stone-300 underline cursor-pointer"
+                                    className="text-[10px] text-[#6B7280] hover:text-[#374151] underline cursor-pointer"
                                   >
                                     Reopen
                                   </button>

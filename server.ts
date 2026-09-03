@@ -41,6 +41,7 @@ app.use(
 // In-memory database stores with persistence during server lifecycle
 let orderSequence = 1;
 const ordersStore: Map<string, Order> = new Map();
+const orderIdempotencyStore: Map<string, string> = new Map();
 
 // In-memory products store initialized from static catalog
 const productsStore: Map<string, Product> = new Map(
@@ -554,6 +555,10 @@ app.post("/api/checkout", async (req, res) => {
     const serviceFee = 0;
     const totalAmount = Math.max(0, Math.round((subtotal - discount + serviceFee) * 100) / 100);
 
+    if (paymentMethod === "CASH" && body.paymentStatus === "PAID" && Number(body.cashTendered || 0) < totalAmount) {
+      return res.status(400).json({ success: false, code: "INSUFFICIENT_CASH", message: "Cash tendered is less than the order total." });
+    }
+
     const orderNumber = getNextOrderNumber();
     let qrCodeUrl: string | null = null;
     let paymentIntentId: string | null = null;
@@ -583,7 +588,7 @@ app.post("/api/checkout", async (req, res) => {
     const newOrder: Order = {
       id: orderId,
       orderNumber,
-      status: "PENDING_PAYMENT",
+      status: paymentMethod === "CASH" && body.paymentStatus === "PAID" ? "PAID" : "PENDING_PAYMENT",
       paymentMethod,
       paymentIntentId,
       paymentMethodId,
@@ -619,7 +624,7 @@ app.post("/api/checkout", async (req, res) => {
           data: {
             id: orderId,
             orderNumber,
-            status: "PENDING_PAYMENT",
+            status: newOrder.status,
             paymentMethod,
             paymentIntentId,
             paymentMethodId,
@@ -673,12 +678,22 @@ app.post("/api/checkout", async (req, res) => {
 // availability, pricing, payment, persistence, and KDS broadcasting stay identical.
 app.post("/api/orders", async (req, res) => {
   try {
+    const idempotencyKey = req.get("Idempotency-Key")?.trim();
+    if (!idempotencyKey) {
+      return res.status(400).json({ success: false, code: "IDEMPOTENCY_KEY_REQUIRED", message: "Idempotency-Key header is required." });
+    }
+    const existingOrderId = orderIdempotencyStore.get(idempotencyKey);
+    if (existingOrderId) {
+      const existingOrder = ordersStore.get(existingOrderId);
+      return res.status(409).json({ success: false, code: "DUPLICATE_REQUEST", message: "This order request has already been processed.", order: existingOrder });
+    }
     const upstream = await fetch(`http://127.0.0.1:${PORT}/api/checkout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req.body),
     });
     const payload = await upstream.json();
+    if (upstream.ok && payload.order?.id) orderIdempotencyStore.set(idempotencyKey, payload.order.id);
     return res.status(upstream.status).json(payload);
   } catch (error) {
     return res.status(502).json({ success: false, code: "ORDER_SERVICE_UNAVAILABLE", message: "Order service is unavailable." });
