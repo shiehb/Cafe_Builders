@@ -97,6 +97,8 @@ export interface Order {
   orderType: OrderType;
   notes?: string | null;
   subtotal: number;
+  discount?: number;
+  promoCode?: string | null;
   serviceFee: number;
   totalAmount: number;
   items: OrderItemSnapshot[];

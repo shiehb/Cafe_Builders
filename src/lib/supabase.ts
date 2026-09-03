@@ -10,18 +10,13 @@ let supabaseAdminClient: SupabaseClient | null = null;
 export function getSupabaseClient(): SupabaseClient | null {
   if (supabaseClient) return supabaseClient;
 
-  let metaEnv: Record<string, any> | undefined;
-  try {
-    metaEnv = (new Function("return typeof import.meta !== 'undefined' ? import.meta.env : undefined"))();
-  } catch {}
-
   const url =
     (typeof process !== "undefined" ? process.env.SUPABASE_URL : undefined) ||
-    metaEnv?.VITE_SUPABASE_URL;
+    (typeof process !== "undefined" ? process.env.NEXT_PUBLIC_SUPABASE_URL : undefined);
 
   const anonKey =
     (typeof process !== "undefined" ? process.env.SUPABASE_ANON_KEY : undefined) ||
-    metaEnv?.VITE_SUPABASE_ANON_KEY;
+    (typeof process !== "undefined" ? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY : undefined);
 
   if (url && anonKey && !url.includes("placeholder") && !anonKey.includes("placeholder")) {
     try {

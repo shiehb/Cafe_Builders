@@ -1,8 +1,7 @@
 import express, { Response } from "express";
-import path from "path";
 import crypto from "crypto";
 import cookieParser from "cookie-parser";
-import { createServer as createViteServer } from "vite";
+import next from "next";
 import dotenv from "dotenv";
 import { createPayMongoQRPhPayment } from "./src/lib/paymongo";
 import { Order, OrderStatus, CheckoutPayload, Product } from "./src/types";
@@ -15,7 +14,7 @@ import {
   createSignedSessionToken,
   isRequestAuthorized,
 } from "./src/lib/auth";
-import { expressAdminAuthMiddleware } from "./src/middleware";
+import { expressAdminAuthMiddleware } from "./src/serverMiddleware";
 
 dotenv.config();
 
@@ -855,21 +854,11 @@ app.all("/api/*", (req, res) => {
   });
 });
 
-// Vite Middleware for Frontend Serving
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (_req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
+  const nextApp = next({ dev: process.env.NODE_ENV !== "production" });
+  await nextApp.prepare();
+  const nextHandler = nextApp.getRequestHandler();
+  app.all("*", (req, res) => nextHandler(req, res));
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`[Cafe Ordering API] Server running on http://0.0.0.0:${PORT}`);

@@ -28,22 +28,14 @@ export const StaffGuard: React.FC<StaffGuardProps> = ({
 }) => {
   const storageKey = `staff_auth_token_${pinEnvKey.toLowerCase()}`;
 
-  // Resolve expected PIN from Vite env or fallback
+  // Resolve an explicitly supplied client-safe environment value or fallback.
   const expectedPin = useMemo(() => {
-    // 1. Try VITE_ prefix
-    const viteKey = `VITE_${pinEnvKey}`;
-    const fromVite = (import.meta as any).env?.[viteKey];
-    if (fromVite && typeof fromVite === "string" && fromVite.trim()) {
-      return fromVite.trim();
-    }
-
-    // 2. Try raw env key
-    const fromRaw = (import.meta as any).env?.[pinEnvKey];
+    const fromRaw = typeof process !== "undefined" ? process.env[`NEXT_PUBLIC_${pinEnvKey}`] : undefined;
     if (fromRaw && typeof fromRaw === "string" && fromRaw.trim()) {
       return fromRaw.trim();
     }
 
-    // 3. Try defaultPin prop
+    // Try defaultPin prop
     if (defaultPin && defaultPin.trim()) {
       return defaultPin.trim();
     }

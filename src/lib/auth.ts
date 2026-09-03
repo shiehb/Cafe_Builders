@@ -38,10 +38,10 @@ export function verifyAdminPin(enteredPin: string, role: string = "admin"): bool
 
   // 2. Also support role-specific environment variables for POS/KDS terminals
   if (role === "pos") {
-    const posPin = (typeof process !== "undefined" && (process.env.POS_PIN || process.env.VITE_POS_PIN)) || "1234";
+    const posPin = (typeof process !== "undefined" && process.env.POS_PIN) || "1234";
     if (cleanPin === posPin) return true;
   } else if (role === "kds") {
-    const kdsPin = (typeof process !== "undefined" && (process.env.KDS_PIN || process.env.VITE_KDS_PIN)) || "1234";
+    const kdsPin = (typeof process !== "undefined" && process.env.KDS_PIN) || "1234";
     if (cleanPin === kdsPin) return true;
   }
 

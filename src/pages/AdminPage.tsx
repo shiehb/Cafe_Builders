@@ -939,7 +939,7 @@ export function AdminPage() {
                       🍳 Kitchen KDS
                     </span>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-stone-900 text-stone-400 border border-stone-800">
-                      VITE_KDS_PIN
+                      KDS_PIN
                     </span>
                   </div>
 
@@ -974,7 +974,7 @@ export function AdminPage() {
                       💳 Cashier POS
                     </span>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-stone-900 text-stone-400 border border-stone-800">
-                      VITE_POS_PIN
+                      POS_PIN
                     </span>
                   </div>
 
@@ -1009,7 +1009,7 @@ export function AdminPage() {
                       📊 Manager Admin
                     </span>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-stone-900 text-stone-400 border border-stone-800">
-                      VITE_ADMIN_PIN
+                      ADMIN_PIN
                     </span>
                   </div>
 

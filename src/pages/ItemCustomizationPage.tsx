@@ -397,36 +397,6 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
           ) : (
             /* ===== BEVERAGE OPTIONS ===== */
             <div className="space-y-5">
-              {/* Temperature is intentionally not customer-configurable. */}
-              {false && product.temperatureOptions && product.temperatureOptions.length > 1 && (
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-[15px] font-bold text-[#1F2937]">Temperature</h2>
-                    <span className="text-[11px] text-[#6B7280]">Select 1</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {(["Iced", "Hot"] as const).map((opt) => {
-                      const isSelected = temperature === opt;
-                      return (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() => setTemperature(opt)}
-                          className={`h-11 rounded-2xl border text-[13px] font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                            isSelected
-                              ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
-                              : "border-[#E5E7EB] bg-[#F7F9FA] text-[#1F2937] hover:bg-stone-100"
-                          }`}
-                        >
-                          <span>{opt === "Iced" ? "🧊 Iced" : "♨️ Hot"}</span>
-                          {isSelected && <Check className="h-4 w-4 text-[#00A86B]" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
               {/* Sugar Level */}
               {hasGroup("sugar") && <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
