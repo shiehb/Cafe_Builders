@@ -1,33 +1,50 @@
 import { PrismaClient } from "@prisma/client";
 import { CATEGORIES, PRODUCTS } from "../data/menuData";
 
-let prismaInstance: PrismaClient | null = null;
+const noOp = {
+  findMany: async () => [],
+  findFirst: async () => null,
+  findUnique: async () => null,
+  create: async (d: any) => d?.data ?? {},
+  update: async (d: any) => d?.data ?? {},
+  delete: async () => ({}),
+  count: async () => 0,
+  upsert: async (d: any) => d?.create ?? {},
+};
+
+let prisma: any;
+let isRealPrisma = false;
+try {
+  if (
+    process.env.DATABASE_URL &&
+    (process.env.DATABASE_URL.startsWith("postgresql://") ||
+      process.env.DATABASE_URL.startsWith("postgres://"))
+  ) {
+    prisma = new PrismaClient({
+      log: ["warn", "error"],
+    });
+    isRealPrisma = true;
+  } else {
+    console.warn("[AI Studio] Database not connected — using mock");
+    prisma = new Proxy({}, { get: () => noOp });
+  }
+} catch {
+  console.warn("[AI Studio] Database not connected — using mock");
+  prisma = new Proxy({}, { get: () => noOp });
+}
+
+export { prisma };
+
 let isSeeded = false;
 
 /**
  * Returns the Prisma client instance if DATABASE_URL is configured and valid
  */
 export function getPrismaClient(): PrismaClient | null {
-  if (!process.env.DATABASE_URL) {
+  if (!isRealPrisma || !process.env.DATABASE_URL) {
     return null;
   }
-
-  const url = process.env.DATABASE_URL.trim();
-  if (!url.startsWith("postgresql://") && !url.startsWith("postgres://")) {
-    return null;
-  }
-
-  try {
-    if (!prismaInstance) {
-      prismaInstance = new PrismaClient({
-        log: ["warn", "error"],
-      });
-    }
-    return prismaInstance;
-  } catch (e) {
-    console.warn("[AI Studio] PrismaClient initialization skipped — using in-memory store", e);
-    return null;
-  }
+  return prisma;
 }
 
 /**

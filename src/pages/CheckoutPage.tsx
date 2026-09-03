@@ -1,71 +1,60 @@
 import React, { useState } from "react";
-import { ArrowLeft, QrCode, Banknote, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
-import confetti from "canvas-confetti";
-import { PaymentMethod, CheckoutPayload, Order } from "../types";
+import { ArrowLeft, Check, AlertCircle, RefreshCw, QrCode, Banknote } from "lucide-react";
+import { Order } from "../types";
 import { formatPrice } from "../lib/utils";
 import { navigate } from "../lib/router";
 import { useCart } from "../context/CartContext";
-import { ConfirmDialog } from "../components/ui/ConfirmDialog";
+
+type CheckoutPaymentOption = "QRPH" | "CASH";
 
 export const CheckoutPage: React.FC = () => {
-  const { cart, cartTotal, cartItemCount, orderType, clearCart, saveOrder, showToast } = useCart();
+  const { cart, cartTotal, cartItemCount, orderType, setOrderType, clearCart, saveOrder, showToast } = useCart();
 
   // Form State
   const [customerName, setCustomerName] = useState<string>("");
-  const [customerPhone, setCustomerPhone] = useState<string>("");
-  const [orderNotes, setOrderNotes] = useState<string>("");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("QRPH");
+  const [paymentOption, setPaymentOption] = useState<CheckoutPaymentOption>("QRPH");
 
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isConfirmOrderOpen, setIsConfirmOrderOpen] = useState<boolean>(false);
 
-  // If cart is empty, redirect back to menu
+  // Financials
+  const serviceCharge = cartTotal * 0.05;
+  const finalTotal = cartTotal + serviceCharge;
+
+  // Empty cart guard
   if (cart.length === 0) {
     return (
-      <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center justify-center p-6 text-center space-y-4">
-        <AlertCircle className="h-12 w-12 text-stone-400" />
+      <div className="min-h-screen bg-[#F7F9FA] flex flex-col items-center justify-center p-6 text-center space-y-4">
+        <AlertCircle className="h-12 w-12 text-[#6B7280]" />
         <div>
-          <h2 className="text-base font-black text-stone-900">Your Tray is Empty</h2>
-          <p className="text-xs text-stone-500 mt-1">
-            Please add items to your tray before proceeding to checkout.
+          <h2 className="text-[16px] font-semibold text-[#1F2937]">Your Cart is Empty</h2>
+          <p className="text-[12px] text-[#6B7280] mt-1">
+            Please add items to your cart before proceeding to checkout.
           </p>
         </div>
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="px-5 py-2.5 rounded-2xl bg-[#00A86B] text-white text-xs font-black hover:bg-emerald-700 transition-all cursor-pointer"
+          className="px-4 py-2 rounded-xl bg-[#00A86B] text-white text-[12px] font-bold hover:bg-[#008F5B] transition-colors cursor-pointer inline-flex items-center gap-1.5"
         >
-          Back to Menu
+          <ArrowLeft className="h-4 w-4" />
+          <span>Back to Menu</span>
         </button>
       </div>
     );
   }
 
-  const handleOpenConfirm = (e: React.FormEvent) => {
+  const handleExecuteCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerName.trim()) {
-      setErrorMessage("Please enter your name for the order pickup.");
+      setErrorMessage("Please enter your name for the order.");
       return;
     }
     setErrorMessage(null);
-    setIsConfirmOrderOpen(true);
-  };
-
-  const handleExecuteCheckout = async () => {
     setIsSubmitting(true);
-    setErrorMessage(null);
 
-    const fullNotes = [
-      orderType === "DINE_IN" ? "Dine-In Order" : "Takeaway Order",
-      customerPhone ? `Contact: ${customerPhone}` : null,
-      orderNotes.trim() || null,
-    ]
-      .filter(Boolean)
-      .join(" • ");
-
-    const payload: CheckoutPayload = {
+    const payload = {
       items: cart.map((item) => ({
         productId: item.productId,
         productName: item.product.name,
@@ -77,8 +66,14 @@ export const CheckoutPage: React.FC = () => {
       })),
       customerName: customerName.trim(),
       orderType,
-      paymentMethod,
-      notes: fullNotes,
+      paymentMethod: paymentOption,
+      paymentBrand: paymentOption === "QRPH" ? "QR Ph" : "Cash",
+      notes: [
+        orderType === "DINE_IN" ? "Dine-In Cafe" : "Takeaway",
+        paymentOption === "QRPH" ? "Payment: QR Ph" : "Payment: Cash at Counter",
+      ]
+        .filter(Boolean)
+        .join(" • "),
     };
 
     try {
@@ -96,231 +91,269 @@ export const CheckoutPage: React.FC = () => {
 
       const createdOrder: Order = data.order;
 
-      // Confetti celebration
-      try {
-        confetti({
-          particleCount: 80,
-          spread: 70,
-          origin: { y: 0.6 },
-          colors: ["#00A86B", "#10b981", "#059669", "#d97706"],
-        });
-      } catch {}
-
-      // Save order and clear cart
       saveOrder(createdOrder);
       clearCart();
-      showToast(`Order #${createdOrder.orderNumber} placed successfully!`, "success");
-
-      // Navigate to digital receipt / live order status
       navigate(`/order/${createdOrder.id}`);
     } catch (err: any) {
       console.error("Checkout error:", err);
       setErrorMessage(err?.message || "Failed to submit order. Please try again.");
     } finally {
       setIsSubmitting(false);
-      setIsConfirmOrderOpen(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] text-stone-900 flex flex-col font-sans pb-32">
-      {/* 1. TOP HEADER & NAVIGATION */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-2xs">
+    <div className="min-h-screen bg-[#F7F9FA] text-[#1F2937] flex flex-col font-sans pb-28">
+      {/* 1. TOP BAR: Back button navigation only */}
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#E5E7EB] shadow-xs">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
           <button
             type="button"
             onClick={() => navigate("/cart")}
             aria-label="Back to Cart"
             title="Back to Cart"
-            className="p-2 -ml-2 rounded-xl text-stone-700 hover:text-stone-950 hover:bg-stone-100 transition-colors cursor-pointer"
+            className="h-10 w-10 rounded-xl text-[#1F2937] hover:bg-[#F7F9FA] flex items-center justify-center transition-colors cursor-pointer -ml-2"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
 
-          <h1 className="text-sm font-black text-stone-900">Checkout & Payment</h1>
+          <span className="font-semibold text-[14px] leading-[20px] text-[#1F2937]">
+            Checkout
+          </span>
 
-          <div className="w-9" />
+          <div className="w-10" />
         </div>
       </header>
 
-      {/* 2. FORM BODY */}
-      <main className="max-w-2xl w-full mx-auto px-4 py-6 space-y-6">
-        <form onSubmit={handleOpenConfirm} className="space-y-6">
+      {/* 2. FORM SECTIONS */}
+      <main className="max-w-2xl w-full mx-auto px-4 py-4 space-y-4">
+        <form id="checkout-form" onSubmit={handleExecuteCheckout} className="space-y-4">
           {/* Error Banner */}
           {errorMessage && (
-            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-3">
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[12px] font-semibold flex items-center gap-2">
               <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
               <span>{errorMessage}</span>
             </div>
           )}
 
-          {/* CUSTOMER INFO CARD */}
-          <div className="bg-white rounded-3xl p-5 border border-stone-200/80 shadow-2xs space-y-4">
-            <h2 className="text-xs font-black uppercase text-stone-400 tracking-wider">
-              Customer Information
-            </h2>
+          {/* SECTION: Order Review */}
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E5E7EB] shadow-card space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[14px] font-semibold text-[#1F2937] leading-[20px]">
+                Order Review ({cartItemCount} {cartItemCount === 1 ? "item" : "items"})
+              </h2>
+              <button
+                type="button"
+                onClick={() => navigate("/cart")}
+                className="text-[12px] font-bold text-[#00A86B] hover:underline cursor-pointer"
+              >
+                Edit Cart
+              </button>
+            </div>
 
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1">
-                  Name for Order Pickup <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="e.g. Maria Santos"
-                  className="w-full px-3.5 py-2.5 rounded-2xl border border-stone-200 bg-stone-50 text-xs text-stone-900 focus:bg-white focus:outline-none focus:border-[#00A86B] transition-all"
-                />
-              </div>
+            <div className="divide-y divide-[#E5E7EB]">
+              {cart.map((item) => {
+                const customizationTokens: string[] = [];
+                if (item.customizations.iceLevel) customizationTokens.push(item.customizations.iceLevel);
+                if (item.customizations.sweetness) customizationTokens.push(item.customizations.sweetness);
+                if (item.customizations.milkOption) customizationTokens.push(item.customizations.milkOption);
+                if (item.customizations.addOns && item.customizations.addOns.length > 0) {
+                  customizationTokens.push(...item.customizations.addOns);
+                }
+                if (item.customizations.specialInstructions) {
+                  customizationTokens.push(`"${item.customizations.specialInstructions}"`);
+                }
+                const subtext = customizationTokens.join(", ") || "Standard Preparation";
 
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1">
-                  Mobile Number (Optional, for SMS updates)
-                </label>
-                <input
-                  type="tel"
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="e.g. 0917 123 4567"
-                  className="w-full px-3.5 py-2.5 rounded-2xl border border-stone-200 bg-stone-50 text-xs text-stone-900 focus:bg-white focus:outline-none focus:border-[#00A86B] transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1">
-                  Order / Preparation Notes
-                </label>
-                <input
-                  type="text"
-                  value={orderNotes}
-                  onChange={(e) => setOrderNotes(e.target.value)}
-                  placeholder="e.g. Less plastic, separate bag..."
-                  className="w-full px-3.5 py-2.5 rounded-2xl border border-stone-200 bg-stone-50 text-xs text-stone-900 focus:bg-white focus:outline-none focus:border-[#00A86B] transition-all"
-                />
-              </div>
+                return (
+                  <div key={item.id} className="py-3 first:pt-0 last:pb-0 flex gap-3 items-center">
+                    <img
+                      src={item.product.imageUrl}
+                      alt={item.product.name}
+                      className="h-12 w-12 rounded-xl object-cover bg-stone-100 shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-[13px] font-semibold text-[#1F2937] truncate">
+                          {item.product.name}
+                        </h3>
+                        <span className="text-[13px] font-bold text-[#1F2937] shrink-0">
+                          {formatPrice(item.lineTotal)}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#6B7280] truncate mt-0.5">{subtext}</p>
+                      <span className="inline-block text-[11px] font-semibold text-[#00A86B] mt-0.5">
+                        Qty: {item.quantity}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* PAYMENT METHOD SELECTOR */}
-          <div className="bg-white rounded-3xl p-5 border border-stone-200/80 shadow-2xs space-y-4">
+          {/* SECTION A: Customer Info */}
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E5E7EB] shadow-card space-y-3">
+            <h2 className="text-[14px] font-semibold text-[#1F2937] leading-[20px]">
+              Customer Information
+            </h2>
+
+            <div>
+              <label className="block text-[12px] font-semibold text-[#1F2937] mb-1">
+                Full Name <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="e.g. Maria Santos"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#E5E7EB] bg-white text-[12px] text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:border-[#00A86B] transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* SECTION B: Dining Option (Selector for "Dine-In" vs "Takeaway") */}
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E5E7EB] shadow-card space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-xs font-black uppercase text-stone-400 tracking-wider">
-                Payment Method
+              <h2 className="text-[14px] font-semibold text-[#1F2937] leading-[20px]">
+                Dining Option
               </h2>
-              <div className="flex items-center gap-1 text-[11px] font-bold text-[#00A86B]">
-                <ShieldCheck className="h-3.5 w-3.5" />
-                <span>Verified QR Ph</span>
-              </div>
+              <span className="text-[10px] text-[#6B7280]">Select 1</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Option 1: Dynamic QR Ph */}
+            <div className="grid grid-cols-2 gap-2.5">
               <button
                 type="button"
-                onClick={() => setPaymentMethod("QRPH")}
-                className={`p-4 rounded-2xl border-2 text-left flex flex-col justify-between transition-all cursor-pointer relative ${
-                  paymentMethod === "QRPH"
-                    ? "border-[#00A86B] bg-emerald-50/60 shadow-xs"
-                    : "border-stone-200 bg-stone-50/50 hover:border-stone-300"
+                onClick={() => setOrderType("DINE_IN")}
+                className={`p-3 rounded-xl border text-[12px] font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                  orderType === "DINE_IN"
+                    ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
+                    : "border-[#E5E7EB] bg-white text-[#1F2937] hover:bg-[#F7F9FA]"
                 }`}
               >
-                <div className="flex items-center justify-between w-full mb-3">
-                  <span className="p-2.5 rounded-xl bg-emerald-100 text-[#00A86B]">
+                <span>Dine-In Cafe</span>
+                {orderType === "DINE_IN" && <Check className="h-4 w-4 text-[#00A86B]" />}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setOrderType("TAKEAWAY")}
+                className={`p-3 rounded-xl border text-[12px] font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                  orderType === "TAKEAWAY"
+                    ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
+                    : "border-[#E5E7EB] bg-white text-[#1F2937] hover:bg-[#F7F9FA]"
+                }`}
+              >
+                <span>Takeaway</span>
+                {orderType === "TAKEAWAY" && <Check className="h-4 w-4 text-[#00A86B]" />}
+              </button>
+            </div>
+          </div>
+
+          {/* SECTION C: Payment Method Selection: QR Ph & Cash at Counter */}
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E5E7EB] shadow-card space-y-3">
+            <h2 className="text-[14px] font-semibold text-[#1F2937] leading-[20px]">
+              Payment Method
+            </h2>
+
+            <div className="space-y-2">
+              {/* Option 1: QR Ph [Selected Green indicator] */}
+              <button
+                type="button"
+                onClick={() => setPaymentOption("QRPH")}
+                className={`w-full p-3.5 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                  paymentOption === "QRPH"
+                    ? "border-[#00A86B] bg-[#E6F6F0] shadow-xs"
+                    : "border-[#E5E7EB] bg-white hover:bg-[#F7F9FA]"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-lg bg-emerald-100 text-[#00A86B] flex items-center justify-center font-bold text-[14px]">
                     <QrCode className="h-5 w-5" />
-                  </span>
-                  <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-[#00A86B] text-white">
-                    Instant
-                  </span>
+                  </div>
+                  <div>
+                    <span className="text-[13px] font-semibold text-[#1F2937] block">
+                      PayMongo QR Ph / Scan to Pay
+                    </span>
+                    <span className="text-[11px] text-[#6B7280] block">
+                      Dynamic QR for GCash, Maya, ShopeePay, or any QR Ph banking app
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-xs font-black text-stone-900">QR Ph (E-Wallets & Banks)</h3>
-                  <p className="text-[11px] text-stone-500 mt-0.5">
-                    GCash, Maya, ShopeePay, BPI, UnionBank, GrabPay
-                  </p>
+                <div
+                  className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 ${
+                    paymentOption === "QRPH"
+                      ? "border-[#00A86B] bg-[#00A86B]"
+                      : "border-[#E5E7EB]"
+                  }`}
+                >
+                  {paymentOption === "QRPH" && <div className="h-2 w-2 rounded-full bg-white" />}
                 </div>
               </button>
 
               {/* Option 2: Cash at Counter */}
               <button
                 type="button"
-                onClick={() => setPaymentMethod("CASH")}
-                className={`p-4 rounded-2xl border-2 text-left flex flex-col justify-between transition-all cursor-pointer ${
-                  paymentMethod === "CASH"
-                    ? "border-[#00A86B] bg-emerald-50/60 shadow-xs"
-                    : "border-stone-200 bg-stone-50/50 hover:border-stone-300"
+                onClick={() => setPaymentOption("CASH")}
+                className={`w-full p-3.5 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                  paymentOption === "CASH"
+                    ? "border-[#00A86B] bg-[#E6F6F0] shadow-xs"
+                    : "border-[#E5E7EB] bg-white hover:bg-[#F7F9FA]"
                 }`}
               >
-                <div className="flex items-center justify-between w-full mb-3">
-                  <span className="p-2.5 rounded-xl bg-amber-100 text-amber-800">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-[14px]">
                     <Banknote className="h-5 w-5" />
-                  </span>
-                  <span className="text-[10px] uppercase font-bold text-stone-400">At Counter</span>
+                  </div>
+                  <div>
+                    <span className="text-[13px] font-semibold text-[#1F2937] block">
+                      Cash at Counter
+                    </span>
+                    <span className="text-[11px] text-[#6B7280] block">
+                      Pay cash directly to barista upon pickup
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-xs font-black text-stone-900">Cash at Cashier</h3>
-                  <p className="text-[11px] text-stone-500 mt-0.5">
-                    Pay at pickup counter before or upon receiving order
-                  </p>
+                <div
+                  className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 ${
+                    paymentOption === "CASH"
+                      ? "border-[#00A86B] bg-[#00A86B]"
+                      : "border-[#E5E7EB]"
+                  }`}
+                >
+                  {paymentOption === "CASH" && <div className="h-2 w-2 rounded-full bg-white" />}
                 </div>
               </button>
             </div>
           </div>
 
-          {/* ORDER ITEMS REVIEW */}
-          <div className="bg-white rounded-3xl p-5 border border-stone-200/80 shadow-2xs space-y-3">
-            <h2 className="text-xs font-black uppercase text-stone-400 tracking-wider">
-              Order Review ({cartItemCount} items)
-            </h2>
-
-            <div className="divide-y divide-stone-100">
-              {cart.map((item) => (
-                <div key={item.id} className="py-2.5 flex items-center justify-between text-xs">
-                  <div className="min-w-0 pr-3">
-                    <p className="font-bold text-stone-900 truncate">
-                      {item.quantity}x {item.product.name}
-                    </p>
-                    <p className="text-[10px] text-stone-500 truncate">
-                      {[
-                        item.customizations.iceLevel,
-                        item.customizations.sweetness,
-                        item.customizations.milkOption,
-                      ]
-                        .filter(Boolean)
-                        .join(" • ")}
-                    </p>
-                  </div>
-                  <span className="font-mono font-bold text-stone-900 shrink-0">
-                    {formatPrice(item.lineTotal)}
-                  </span>
-                </div>
-              ))}
+          {/* Order Summary Recap */}
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E5E7EB] shadow-card space-y-2 text-[12px] text-[#1F2937]">
+            <div className="flex justify-between text-[#6B7280]">
+              <span>Items Subtotal ({cartItemCount})</span>
+              <span>{formatPrice(cartTotal)}</span>
             </div>
-
-            <div className="border-t border-stone-100 pt-3 space-y-1.5 text-xs">
-              <div className="flex justify-between text-stone-500">
-                <span>Subtotal</span>
-                <span className="font-mono">{formatPrice(cartTotal)}</span>
-              </div>
-              <div className="flex justify-between text-stone-500">
-                <span>Dining Service</span>
-                <span>{orderType === "DINE_IN" ? "Dine-In Cafe" : "Takeaway"}</span>
-              </div>
-              <div className="flex justify-between text-sm font-black text-stone-900 pt-1.5 border-t border-stone-100">
-                <span>Total Due</span>
-                <span className="font-display font-black text-base text-[#00A86B]">
-                  {formatPrice(cartTotal)}
-                </span>
-              </div>
+            <div className="flex justify-between text-[#6B7280]">
+              <span>Tax / Service Charge (5%)</span>
+              <span>{formatPrice(serviceCharge)}</span>
+            </div>
+            <div className="border-t border-[#E5E7EB] pt-2 flex justify-between font-bold text-[14px] text-[#1F2937]">
+              <span>Total Due</span>
+              <span className="text-[#00A86B]">{formatPrice(finalTotal)}</span>
             </div>
           </div>
+        </form>
+      </main>
 
-          {/* SUBMIT BUTTON */}
+      {/* 3. STICKY BOTTOM BAR: Full-width button ("Place Order - [Total]") */}
+      <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-[#E5E7EB] p-3 sm:p-4 shadow-footer">
+        <div className="max-w-2xl mx-auto">
           <button
             type="submit"
+            form="checkout-form"
             disabled={isSubmitting}
-            className="w-full h-14 rounded-2xl bg-[#00A86B] hover:bg-emerald-700 text-white font-black text-sm flex items-center justify-center gap-2 shadow-xl shadow-emerald-700/25 active:scale-[0.98] transition-all cursor-pointer"
+            className="w-full h-11 rounded-xl bg-[#00A86B] hover:bg-[#008F5B] text-white font-bold text-[14px] leading-[20px] flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer active:scale-[0.99] disabled:opacity-60"
           >
             {isSubmitting ? (
               <>
@@ -328,25 +361,11 @@ export const CheckoutPage: React.FC = () => {
                 <span>Processing Order...</span>
               </>
             ) : (
-              <span>Confirm & Place Order ({formatPrice(cartTotal)})</span>
+              <span>Place Order - {formatPrice(finalTotal)}</span>
             )}
           </button>
-        </form>
-      </main>
-
-      {/* 3. CONFIRM ORDER ACTION DIALOG */}
-      <ConfirmDialog
-        isOpen={isConfirmOrderOpen}
-        title="Confirm Order Placement?"
-        message={`Are you ready to submit your order for ${formatPrice(cartTotal)} via ${
-          paymentMethod === "QRPH" ? "Dynamic QR Ph" : "Cash at Counter"
-        }?`}
-        confirmLabel={isSubmitting ? "Submitting..." : "Yes, Place Order"}
-        variant="primary"
-        isLoading={isSubmitting}
-        onConfirm={handleExecuteCheckout}
-        onCancel={() => setIsConfirmOrderOpen(false)}
-      />
+        </div>
+      </div>
     </div>
   );
 };

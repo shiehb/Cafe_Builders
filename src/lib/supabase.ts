@@ -10,7 +10,10 @@ let supabaseAdminClient: SupabaseClient | null = null;
 export function getSupabaseClient(): SupabaseClient | null {
   if (supabaseClient) return supabaseClient;
 
-  const metaEnv = typeof import.meta !== "undefined" ? (import.meta as Record<string, any>).env : undefined;
+  let metaEnv: Record<string, any> | undefined;
+  try {
+    metaEnv = (new Function("return typeof import.meta !== 'undefined' ? import.meta.env : undefined"))();
+  } catch {}
 
   const url =
     (typeof process !== "undefined" ? process.env.SUPABASE_URL : undefined) ||

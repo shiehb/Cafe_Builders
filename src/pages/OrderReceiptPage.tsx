@@ -1,20 +1,15 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   ArrowLeft,
-  CheckCircle2,
   Clock,
-  QrCode,
-  Banknote,
-  Receipt,
-  UtensilsCrossed,
-  PackageOpen,
-  Sparkles,
-  RefreshCw,
-  ExternalLink,
-  ChefHat,
   BellRing,
+  ChefHat,
+  CheckCircle2,
+  QrCode,
+  RefreshCw,
+  Sparkles,
 } from "lucide-react";
-import { Order, OrderStatus } from "../types";
+import { Order } from "../types";
 import { formatPrice, formatDateTime } from "../lib/utils";
 import { navigate } from "../lib/router";
 import { useCart } from "../context/CartContext";
@@ -27,7 +22,6 @@ interface OrderReceiptPageProps {
 export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNumber }) => {
   const { savedOrders, updateOrder, showToast } = useCart();
 
-  // Find order in local cache first
   const [order, setOrder] = useState<Order | null>(() => {
     return (
       savedOrders.find(
@@ -45,9 +39,10 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
       const res = await fetch(`/api/orders/${orderIdOrNumber}`);
       if (res.ok) {
         const json = await res.json();
-        if (json.order) {
-          setOrder(json.order);
-          updateOrder(json.order);
+        const liveOrder = json.data || json.order;
+        if (liveOrder) {
+          setOrder(liveOrder);
+          updateOrder(liveOrder);
         }
       }
     } catch {
@@ -59,11 +54,10 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
 
   useEffect(() => {
     fetchLiveOrder();
-    const interval = setInterval(fetchLiveOrder, 5000);
+    const interval = setInterval(fetchLiveOrder, 4000);
     return () => clearInterval(interval);
   }, [fetchLiveOrder]);
 
-  // Realtime subscription for this specific order
   useOrderRealtime(
     order?.id || orderIdOrNumber,
     useCallback(
@@ -77,12 +71,12 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
     )
   );
 
-  // Simulate Instant PayMongo Webhook Payment (Test Mode)
+  // Simulate PayMongo Webhook Payment Verification
   const handleSimulatePayment = async () => {
     if (!order) return;
     setIsSimulatingPayment(true);
     try {
-      const res = await fetch("/api/simulate/webhook-payment", {
+      const res = await fetch("/api/webhooks/paymongo/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -90,16 +84,16 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
           paymentIntentId: order.paymentIntentId,
         }),
       });
+
       const data = await res.json();
       if (res.ok && data.order) {
         setOrder(data.order);
         updateOrder(data.order);
-        showToast("Payment confirmed! Kitchen received your order.", "success");
       } else {
-        showToast(data.error || "Simulation failed", "error");
+        console.error("Failed to simulate payment:", data.error);
       }
     } catch (err: any) {
-      showToast(err?.message || "Failed to simulate payment", "error");
+      console.error("Simulation error:", err);
     } finally {
       setIsSimulatingPayment(false);
     }
@@ -107,10 +101,10 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#F7F9FA] flex items-center justify-center p-4">
         <div className="text-center space-y-3">
           <div className="h-8 w-8 rounded-full border-2 border-[#00A86B] border-t-transparent animate-spin mx-auto" />
-          <p className="text-xs text-stone-500 font-bold">Loading order status...</p>
+          <p className="text-[12px] text-[#6B7280] font-semibold">Loading receipt...</p>
         </div>
       </div>
     );
@@ -118,312 +112,344 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
 
   if (!order) {
     return (
-      <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center justify-center p-6 text-center space-y-4">
-        <Receipt className="h-12 w-12 text-stone-400" />
+      <div className="min-h-screen bg-[#F7F9FA] flex flex-col items-center justify-center p-6 text-center space-y-4">
+        <div className="h-12 w-12 rounded-full bg-stone-100 flex items-center justify-center mx-auto text-[#6B7280]">
+          <Clock className="h-6 w-6" />
+        </div>
         <div>
-          <h2 className="text-base font-black text-stone-900">Order Not Found</h2>
-          <p className="text-xs text-stone-500 mt-1">
+          <h2 className="text-[16px] font-semibold text-[#1F2937]">Order Not Found</h2>
+          <p className="text-[12px] text-[#6B7280] mt-1">
             Could not find an order matching "{orderIdOrNumber}".
           </p>
         </div>
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="px-5 py-2.5 rounded-2xl bg-[#00A86B] text-white text-xs font-black hover:bg-emerald-700 transition-all cursor-pointer"
+          className="px-4 py-2 rounded-xl bg-[#00A86B] text-white text-[12px] font-bold hover:bg-[#008F5B] transition-colors cursor-pointer inline-flex items-center gap-1.5"
         >
-          Back to Menu
+          <ArrowLeft className="h-4 w-4" />
+          <span>Back to Menu</span>
         </button>
       </div>
     );
   }
 
-  const isPaid = order.status !== "PENDING_PAYMENT";
-  const isReady = order.status === "READY";
-  const isCompleted = order.status === "COMPLETED";
-
-  const getStatusBadge = () => {
+  // Determine status label and header
+  const getStatusInfo = () => {
     switch (order.status) {
-      case "PENDING_PAYMENT":
-        return {
-          label: "Awaiting Payment",
-          bgColor: "bg-amber-100 text-amber-900 border-amber-200",
-          icon: Clock,
-        };
       case "PREPARING":
         return {
-          label: "Brewing / In Preparation",
-          bgColor: "bg-blue-100 text-blue-900 border-blue-200",
+          title: "Preparing your order",
+          badgeLabel: "In Preparation",
+          estimate: "5 - 8 mins",
           icon: ChefHat,
         };
       case "READY":
         return {
-          label: "Ready for Pickup!",
-          bgColor: "bg-emerald-100 text-[#00A86B] border-emerald-300 animate-pulse",
+          title: "Ready for Pickup!",
+          badgeLabel: "Ready Now",
+          estimate: "At Barista Counter",
           icon: BellRing,
         };
       case "COMPLETED":
         return {
-          label: "Completed & Claimed",
-          bgColor: "bg-stone-100 text-stone-700 border-stone-200",
+          title: "Order Completed",
+          badgeLabel: "Claimed",
+          estimate: "Completed",
           icon: CheckCircle2,
         };
       default:
         return {
-          label: order.status,
-          bgColor: "bg-stone-100 text-stone-700 border-stone-200",
+          title: "Order Confirmed",
+          badgeLabel: "Order Received",
+          estimate: "6 - 10 mins",
           icon: Clock,
         };
     }
   };
 
-  const statusBadge = getStatusBadge();
-  const StatusIcon = statusBadge.icon;
+  const statusInfo = getStatusInfo();
+  const StatusIcon = statusInfo.icon;
+  const serviceCharge = (order.subtotal || order.totalAmount) * 0.05;
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] text-stone-900 flex flex-col font-sans pb-28">
-      {/* 1. TOP HEADER */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-2xs">
+    <div className="min-h-screen bg-[#F7F9FA] text-[#1F2937] flex flex-col font-sans pb-28">
+      {/* 1. TOP BAR: Back button navigation only (NO share icon, NO favorite icon) */}
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#E5E7EB] shadow-xs">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
           <button
             type="button"
             onClick={() => navigate("/")}
             aria-label="Back to Menu"
             title="Back to Menu"
-            className="p-2 -ml-2 rounded-xl text-stone-700 hover:text-stone-950 hover:bg-stone-100 transition-colors cursor-pointer"
+            className="h-10 w-10 rounded-xl text-[#1F2937] hover:bg-[#F7F9FA] flex items-center justify-center transition-colors cursor-pointer -ml-2"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
 
-          <span className="text-xs font-black font-mono text-stone-600">
-            Order #{order.orderNumber}
+          <span className="font-semibold text-[14px] leading-[20px] text-[#1F2937]">
+            Order Receipt
           </span>
 
-          <div className="w-9" />
+          <div className="w-10" />
         </div>
       </header>
 
-      {/* 2. ORDER HERO CARD */}
-      <main className="max-w-2xl w-full mx-auto px-4 py-6 space-y-6">
-        <div className="bg-white rounded-3xl p-6 border border-stone-200/80 shadow-md text-center space-y-4">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-black shadow-2xs">
-            <StatusIcon className="h-4 w-4" />
-            <span>{statusBadge.label}</span>
+      {/* 2. MAIN CONTENT */}
+      <main className="max-w-2xl w-full mx-auto px-4 py-5 space-y-4">
+        {/* STATUS HEADER: Big bold status text + Status Badge with subtle background tint */}
+        <div className="text-center space-y-2 py-2">
+          {/* Status Badge with subtle background tint: status/badge-bg (#FEF3C7) and status/badge-text (#92400E) */}
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FEF3C7] text-[#92400E] border border-amber-200/60 text-[12px] font-bold">
+            <StatusIcon className="h-3.5 w-3.5" />
+            <span>{statusInfo.badgeLabel}</span>
           </div>
 
-          <div>
-            <p className="text-[11px] font-bold text-stone-400 uppercase tracking-widest">
-              Claim Ticket Number
-            </p>
-            <h1 className="text-4xl sm:text-5xl font-black text-stone-900 tracking-tight font-mono mt-1">
-              {order.orderNumber}
-            </h1>
-            <p className="text-xs text-stone-500 font-medium mt-1">
-              Placed for <span className="font-bold text-stone-800">{order.customerName}</span> •{" "}
-              {order.orderType === "DINE_IN" ? "Dine-In Cafe" : "Takeaway"}
-            </p>
-          </div>
+          {/* Big bold status text */}
+          <h1 className="text-[24px] font-bold text-[#1F2937] leading-[32px]">
+            {statusInfo.title}
+          </h1>
 
-          {/* Progress Tracker Bar */}
-          <div className="pt-2">
-            <div className="grid grid-cols-4 gap-2 text-center">
-              {/* Step 1: Received */}
-              <div className="space-y-1.5">
-                <div
-                  className={`h-2 rounded-full ${
-                    order.status === "PENDING_PAYMENT" ? "bg-amber-400" : "bg-[#00A86B]"
-                  }`}
-                />
-                <span className="text-[10px] font-bold text-stone-500 block">Received</span>
-              </div>
-              {/* Step 2: Paid */}
-              <div className="space-y-1.5">
-                <div
-                  className={`h-2 rounded-full ${
-                    isPaid ? "bg-[#00A86B]" : "bg-stone-200"
-                  }`}
-                />
-                <span className="text-[10px] font-bold text-stone-500 block">Confirmed</span>
-              </div>
-              {/* Step 3: Preparing */}
-              <div className="space-y-1.5">
-                <div
-                  className={`h-2 rounded-full ${
-                    order.status === "PREPARING" || isReady || isCompleted
-                      ? "bg-[#00A86B]"
-                      : "bg-stone-200"
-                  }`}
-                />
-                <span className="text-[10px] font-bold text-stone-500 block">Brewing</span>
-              </div>
-              {/* Step 4: Ready */}
-              <div className="space-y-1.5">
-                <div
-                  className={`h-2 rounded-full ${
-                    isReady || isCompleted ? "bg-[#00A86B]" : "bg-stone-200"
-                  }`}
-                />
-                <span className="text-[10px] font-bold text-stone-500 block">Ready</span>
-              </div>
-            </div>
-          </div>
+          <p className="text-[12px] text-[#6B7280]">
+            Thank you, {order.customerName}! We're handcrafting your order with care.
+          </p>
         </div>
 
-        {/* 3. PAYMENT ACTION CARD (Dynamic QR Ph or Cash) */}
-        {!isPaid && (
-          <div className="bg-white rounded-3xl p-6 border-2 border-emerald-600/30 shadow-md space-y-4">
-            {order.paymentMethod === "QRPH" ? (
-              <div className="space-y-4 text-center">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-[#00A86B] text-xs font-black">
-                  <QrCode className="h-3.5 w-3.5" />
-                  <span>Scan to Pay with Any QR Ph App</span>
-                </div>
-
-                <div className="bg-stone-50 p-4 rounded-2xl inline-block border border-stone-200 shadow-inner">
-                  {order.qrCodeUrl ? (
-                    <img
-                      src={order.qrCodeUrl}
-                      alt="PayMongo Dynamic QR Ph"
-                      className="h-48 w-48 sm:h-56 sm:w-56 mx-auto object-contain"
-                    />
-                  ) : (
-                    <div className="h-48 w-48 flex items-center justify-center text-stone-400">
-                      <QrCode className="h-20 w-20 animate-pulse" />
-                    </div>
-                  )}
-                  <p className="text-[10px] text-stone-400 font-mono mt-2">
-                    Official PayMongo QR Ph Rail
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-sm font-black text-stone-900">
-                    Amount Due:{" "}
-                    <span className="text-emerald-700 font-display">
-                      {formatPrice(order.totalAmount)}
-                    </span>
-                  </p>
-                  <p className="text-xs text-stone-500 mt-1 max-w-sm mx-auto">
-                    Open GCash, Maya, ShopeePay, BPI, or any PH banking app, select "Scan to Pay",
-                    and scan this QR code.
-                  </p>
-                </div>
-
-                {/* Simulation Button for Testing */}
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    disabled={isSimulatingPayment}
-                    onClick={handleSimulatePayment}
-                    className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-emerald-400 text-xs font-bold transition-all cursor-pointer inline-flex items-center justify-center gap-2 border border-stone-700"
-                  >
-                    {isSimulatingPayment ? (
-                      <>
-                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                        <span>Verifying Webhook...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-3.5 w-3.5" />
-                        <span>Simulate Instant Webhook Payment (Test Mode)</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center space-y-3">
-                <div className="h-12 w-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto">
-                  <Banknote className="h-6 w-6" />
-                </div>
-                <div>
-                  <h2 className="text-base font-black text-stone-900">Cash Payment at Counter</h2>
-                  <p className="text-xs text-stone-600 mt-1 max-w-sm mx-auto">
-                    Please present claim ticket{" "}
-                    <span className="font-mono font-bold text-stone-900">#{order.orderNumber}</span>{" "}
-                    and pay{" "}
-                    <span className="font-bold text-emerald-700">
-                      {formatPrice(order.totalAmount)}
-                    </span>{" "}
-                    to the cashier to begin preparation.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 4. ITEMIZED DIGITAL RECEIPT */}
-        <div className="bg-white rounded-3xl p-5 border border-stone-200/80 shadow-2xs space-y-4">
-          <div className="flex items-center justify-between border-b border-stone-100 pb-3">
-            <h2 className="text-xs font-black uppercase text-stone-400 tracking-wider">
-              Itemized Receipt
-            </h2>
-            <span className="text-xs text-stone-400 font-mono">
-              {formatDateTime(order.createdAt)}
-            </span>
-          </div>
-
-          <div className="divide-y divide-stone-100">
-            {order.items.map((item, idx) => (
-              <div key={idx} className="py-3 flex items-start justify-between gap-3 text-xs">
-                <div className="min-w-0 flex-1">
-                  <p className="font-black text-stone-900">
-                    {item.quantity}x {item.productName}
-                  </p>
-                  {item.customizations && (
-                    <div className="flex flex-wrap gap-1 mt-1 text-[10px] text-stone-500 font-medium">
-                      {item.customizations.iceLevel && <span>{item.customizations.iceLevel}</span>}
-                      {item.customizations.sweetness && (
-                        <span>• {item.customizations.sweetness}</span>
-                      )}
-                      {item.customizations.milkOption && (
-                        <span>• {item.customizations.milkOption}</span>
-                      )}
-                      {item.customizations.addOns?.map((a, i) => (
-                        <span key={i}>• {a}</span>
-                      ))}
-                    </div>
-                  )}
-                  {item.notes && (
-                    <p className="text-[10px] text-stone-500 italic mt-0.5">Note: {item.notes}</p>
-                  )}
-                </div>
-                <span className="font-mono font-black text-stone-900 shrink-0">
-                  {formatPrice(item.subtotal || item.unitPrice * item.quantity)}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className="border-t border-stone-100 pt-3 space-y-1.5 text-xs">
-            <div className="flex justify-between text-stone-500">
-              <span>Subtotal</span>
-              <span className="font-mono">{formatPrice(order.subtotal)}</span>
-            </div>
-            <div className="flex justify-between text-stone-500">
-              <span>Payment Mode</span>
-              <span className="font-bold">
-                {order.paymentMethod === "QRPH" ? "Dynamic QR Ph" : "Cash at Counter"}
+        {/* TICKET / ORDER CARD */}
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E5E7EB] shadow-card space-y-4">
+          {/* Order Number highlighted in brand/primary + Pickup estimate time */}
+          <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3.5">
+            <div>
+              <span className="text-[28px] sm:text-[32px] font-bold text-[#00A86B] font-mono leading-none block">
+                #{order.orderNumber}
               </span>
             </div>
-            <div className="border-t border-stone-100 pt-2 flex justify-between text-base font-black text-stone-900">
-              <span>Total Paid / Due</span>
-              <span className="font-display text-[#00A86B]">{formatPrice(order.totalAmount)}</span>
+
+            <div className="text-right">
+              <span className="text-[10px] font-semibold text-[#6B7280] uppercase tracking-wider block">
+                Pickup Estimate
+              </span>
+              <div className="inline-flex items-center gap-1 text-[13px] font-bold text-[#1F2937] mt-0.5">
+                <Clock className="h-3.5 w-3.5 text-[#00A86B]" />
+                <span>{statusInfo.estimate}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* PAYMONGO DYNAMIC QR PH PAYMENT SECTION */}
+          {(order.paymentMethod === "QRPH" || order.qrCodeUrl) && (
+            <div className="rounded-2xl border-2 border-emerald-500/30 bg-[#F0FDF4]/50 p-4 sm:p-5 space-y-3.5">
+              <div className="flex items-center justify-between border-b border-emerald-200/60 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-xl bg-[#00A86B] text-white flex items-center justify-center font-bold shadow-xs">
+                    <QrCode className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <span className="text-[13px] font-bold text-[#1F2937] block leading-tight">
+                      PayMongo • QR Ph Scan to Pay
+                    </span>
+                    <span className="text-[10px] text-[#6B7280] block">
+                      National QR Standard (GCash, Maya, Banks)
+                    </span>
+                  </div>
+                </div>
+
+                {order.status === "PENDING_PAYMENT" ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-300 text-[11px] font-bold">
+                    <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
+                    Awaiting Payment
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-[#00A86B] border border-emerald-300 text-[11px] font-bold">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Paid & Confirmed
+                  </span>
+                )}
+              </div>
+
+              {order.status === "PENDING_PAYMENT" ? (
+                <div className="flex flex-col items-center justify-center text-center space-y-3 py-1">
+                  {/* The PayMongo Dynamic QR Code image */}
+                  <div className="p-3 bg-white border-2 border-emerald-600/20 rounded-2xl shadow-md inline-block relative">
+                    {order.qrCodeUrl ? (
+                      <img
+                        src={order.qrCodeUrl}
+                        alt={`PayMongo Dynamic QR Ph Code for Order #${order.orderNumber}`}
+                        className="w-56 h-56 sm:w-60 sm:h-60 object-contain rounded-xl"
+                      />
+                    ) : (
+                      <div className="w-56 h-56 flex flex-col items-center justify-center bg-stone-50 rounded-xl text-[#6B7280] text-xs gap-2">
+                        <RefreshCw className="h-6 w-6 animate-spin text-[#00A86B]" />
+                        <span>Generating PayMongo QR...</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1 max-w-sm">
+                    <div className="text-[20px] font-bold text-[#00A86B] font-mono">
+                      {formatPrice(order.totalAmount)}
+                    </div>
+                    <p className="text-[12px] font-bold text-[#1F2937]">
+                      Scan with GCash, Maya, ShopeePay, or Mobile Banking
+                    </p>
+                    <p className="text-[11px] text-[#6B7280] leading-relaxed">
+                      Launch your e-wallet app, tap <strong>Scan QR</strong>, and scan the dynamic PayMongo code above. Once paid, this ticket updates automatically in real-time.
+                    </p>
+                  </div>
+
+                  {/* Supported Payment App Pills */}
+                  <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+                    <span className="px-2 py-0.5 rounded-md bg-white border border-[#E5E7EB] text-[10px] font-bold text-[#1F2937]">
+                      GCash
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-white border border-[#E5E7EB] text-[10px] font-bold text-[#1F2937]">
+                      Maya
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-white border border-[#E5E7EB] text-[10px] font-bold text-[#1F2937]">
+                      ShopeePay
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-white border border-[#E5E7EB] text-[10px] font-bold text-[#1F2937]">
+                      BPI / BDO / UnionBank
+                    </span>
+                  </div>
+
+                  {/* Instant Simulation / Testing button for sandbox */}
+                  <div className="pt-2 w-full max-w-xs">
+                    <button
+                      type="button"
+                      onClick={handleSimulatePayment}
+                      disabled={isSimulatingPayment}
+                      className="w-full h-10 rounded-xl bg-white hover:bg-emerald-50 text-[#00A86B] border border-emerald-300 font-bold text-[12px] flex items-center justify-center gap-1.5 shadow-2xs transition-colors cursor-pointer disabled:opacity-60 active:scale-98"
+                    >
+                      {isSimulatingPayment ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          <span>Verifying with PayMongo...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-3.5 w-3.5 text-[#00A86B]" />
+                          <span>Simulate PayMongo Payment Confirmation</span>
+                        </>
+                      )}
+                    </button>
+                    <p className="text-[9px] text-[#9CA3AF] text-center mt-1">
+                      (Test mode: triggers PayMongo payment.paid webhook simulation)
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl p-3 border border-emerald-200 flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-emerald-100 text-[#00A86B] flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[12px] font-bold text-[#1F2937] block">
+                      PayMongo QR Ph Payment Verified
+                    </span>
+                    <span className="text-[11px] text-[#6B7280] block truncate">
+                      {order.paymentIntentId ? `Ref: ${order.paymentIntentId}` : "Paid via QR Ph"} • Handcrafted preparation in progress
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Ordered Items Breakdown (Quantity, Title, Modifiers, Price) */}
+          <div className="space-y-3">
+            <h2 className="text-[12px] font-semibold text-[#6B7280] uppercase tracking-wider">
+              Ordered Items ({order.items.reduce((sum, item) => sum + item.quantity, 0)})
+            </h2>
+
+            <div className="divide-y divide-[#E5E7EB]">
+              {order.items.map((item, idx) => {
+                const modifiers: string[] = [];
+                if (item.customizations?.iceLevel) modifiers.push(item.customizations.iceLevel);
+                if (item.customizations?.sweetness) modifiers.push(item.customizations.sweetness);
+                if (item.customizations?.milkOption) modifiers.push(item.customizations.milkOption);
+                if (item.customizations?.addOns && item.customizations.addOns.length > 0) {
+                  modifiers.push(...item.customizations.addOns);
+                }
+                const modifierText = modifiers.join(" • ") || "Standard Recipe";
+
+                return (
+                  <div key={idx} className="py-2.5 flex items-start justify-between gap-3 text-[12px]">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-[#1F2937] leading-[18px]">
+                        {item.quantity}x {item.productName}
+                      </p>
+                      <p className="text-[11px] text-[#6B7280] mt-0.5">
+                        {modifierText}
+                      </p>
+                      {item.notes && (
+                        <p className="text-[10px] text-[#6B7280] italic mt-0.5">
+                          Note: {item.notes}
+                        </p>
+                      )}
+                    </div>
+                    <span className="font-bold text-[#1F2937] shrink-0">
+                      {formatPrice(item.subtotal || item.unitPrice * item.quantity)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Payment Summary (Subtotal, Tax, Payment method used) */}
+          <div className="border-t border-[#E5E7EB] pt-3.5 space-y-2 text-[12px]">
+            <div className="flex justify-between text-[#6B7280]">
+              <span>Subtotal</span>
+              <span className="font-semibold text-[#1F2937]">
+                {formatPrice(order.subtotal || order.totalAmount)}
+              </span>
+            </div>
+            <div className="flex justify-between text-[#6B7280]">
+              <span>Tax / Service Charge (5%)</span>
+              <span className="font-semibold text-[#1F2937]">
+                {formatPrice(serviceCharge)}
+              </span>
+            </div>
+            <div className="flex justify-between text-[#6B7280]">
+              <span>Payment Method</span>
+              <span className="font-semibold text-[#1F2937]">
+                {order.paymentMethod === "QRPH" ? "GCash / QR Ph" : "Cash at Counter"}
+              </span>
+            </div>
+            <div className="flex justify-between text-[#6B7280]">
+              <span>Order Type</span>
+              <span className="font-semibold text-[#1F2937]">
+                {order.orderType === "DINE_IN" ? "Dine-In Cafe" : "Takeaway"}
+              </span>
+            </div>
+            <div className="flex justify-between text-[#6B7280]">
+              <span>Date & Time</span>
+              <span className="text-[#6B7280]">{formatDateTime(order.createdAt)}</span>
+            </div>
+
+            <div className="border-t border-[#E5E7EB] pt-3 flex justify-between items-baseline">
+              <span className="text-[14px] font-bold text-[#1F2937]">Total Amount</span>
+              <span className="text-[18px] font-bold text-[#00A86B]">
+                {formatPrice(order.totalAmount)}
+              </span>
             </div>
           </div>
         </div>
+      </main>
 
-        {/* 5. ACTION BUTTONS */}
-        <div className="flex items-center gap-3">
+      {/* 3. BOTTOM ACTION: Button ("Back to Menu" or "Track New Order") */}
+      <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-[#E5E7EB] p-3 sm:p-4 shadow-footer">
+        <div className="max-w-2xl mx-auto">
           <button
             type="button"
             onClick={() => navigate("/")}
-            className="flex-1 h-12 rounded-2xl bg-[#00A86B] hover:bg-emerald-700 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-700/25 transition-all cursor-pointer"
+            className="w-full h-11 rounded-xl bg-[#00A86B] hover:bg-[#008F5B] text-white font-bold text-[14px] leading-[20px] flex items-center justify-center shadow-xs transition-colors cursor-pointer active:scale-[0.99]"
           >
-            <span>Order Something Else</span>
+            Back to Menu
           </button>
         </div>
-      </main>
+      </div>
     </div>
   );
 };

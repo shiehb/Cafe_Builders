@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Lock, Unlock, KeyRound, ShieldAlert, ArrowLeft, Delete, Coffee, RefreshCw } from "lucide-react";
+import { Lock, Unlock, KeyRound, ShieldAlert, ArrowLeft, Delete, Coffee, RefreshCw, RotateCcw } from "lucide-react";
 import { navigate, getQueryParam } from "../../lib/router";
 import { loginWithAdminPin, checkServerSession, logoutAdminSession } from "../../lib/auth";
 
@@ -238,10 +238,11 @@ export const StaffGuard: React.FC<StaffGuardProps> = ({
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-stone-800 text-stone-300 text-xs font-semibold transition-all cursor-pointer shadow-xs"
+          aria-label="Back to Customer Menu"
+          title="Back to Customer Menu"
+          className="h-10 w-10 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-stone-800 text-stone-300 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
         >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          <span>Exit to Customer Menu</span>
+          <ArrowLeft className="h-4 w-4" />
         </button>
       </div>
 
@@ -311,14 +312,15 @@ export const StaffGuard: React.FC<StaffGuardProps> = ({
             </button>
           ))}
 
-          {/* Clear Button */}
+          {/* Clear Button (Icon) */}
           <button
             type="button"
             onClick={handleClear}
-            className="h-14 rounded-2xl bg-stone-900/40 hover:bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800/60 text-xs font-bold transition-all cursor-pointer flex items-center justify-center active:scale-95"
+            className="h-14 rounded-2xl bg-stone-900/40 hover:bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800/60 transition-all cursor-pointer flex items-center justify-center active:scale-95"
             title="Clear all digits"
+            aria-label="Clear all digits"
           >
-            Clear
+            <RotateCcw className="h-5 w-5" />
           </button>
 
           {/* 0 Button */}

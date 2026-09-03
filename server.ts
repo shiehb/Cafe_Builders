@@ -766,10 +766,10 @@ const handlePayMongoWebhook = (req: any, res: Response) => {
 app.post("/api/webhooks/paymongo", handlePayMongoWebhook);
 app.post("/api/paymongo-webhook", handlePayMongoWebhook);
 
-// 9. Simulation Endpoint: /api/webhooks/paymongo/simulate
+// 9. Simulation Endpoint: /api/webhooks/paymongo/simulate, /api/simulate-webhook, /api/simulate/webhook-payment
 // Allows one-click testing of PayMongo payment.paid webhook in sandbox preview
-app.post("/api/webhooks/paymongo/simulate", (req, res) => {
-  const { orderId, paymentIntentId } = req.body;
+const handleSimulateWebhook = (req: any, res: Response) => {
+  const { orderId, paymentIntentId } = req.body || {};
 
   let targetOrder: Order | undefined = undefined;
 
@@ -800,12 +800,16 @@ app.post("/api/webhooks/paymongo/simulate", (req, res) => {
   // Broadcast to kitchen-orders and customer live receipt
   broadcastRealtime("order_paid", targetOrder);
 
-  res.json({
+  return res.json({
     success: true,
     message: `Simulated PayMongo payment.paid webhook for Order #${targetOrder.orderNumber}`,
     order: targetOrder,
   });
-});
+};
+
+app.post("/api/webhooks/paymongo/simulate", handleSimulateWebhook);
+app.post("/api/simulate-webhook", handleSimulateWebhook);
+app.post("/api/simulate/webhook-payment", handleSimulateWebhook);
 
 // Express fallback for unmatched /api/* routes: Always return JSON 404 instead of HTML
 app.all("/api/*", (req, res) => {

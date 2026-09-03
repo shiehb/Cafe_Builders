@@ -1,157 +1,95 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Receipt, ChefHat, ShoppingBag, CreditCard, LayoutDashboard, Shield, ChevronDown } from "lucide-react";
-import { formatPrice } from "../lib/utils";
-import { Order } from "../types";
-import { navigate } from "../lib/router";
+import { Search, X } from "lucide-react";
 
 interface NavbarProps {
-  onOpenCart: () => void;
-  onOpenReceipts: () => void;
+  onOpenCart?: () => void;
+  onOpenReceipts?: () => void;
   onOpenKds?: () => void;
-  cartCount: number;
-  cartTotal: number;
-  activeOrder?: Order | null;
-  onSelectActiveOrder: (order: Order) => void;
+  cartCount?: number;
+  cartTotal?: number;
+  searchQuery?: string;
+  onSearchChange?: (val: string) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  onOpenCart,
-  onOpenReceipts,
-  cartCount,
-  cartTotal,
-  activeOrder,
-  onSelectActiveOrder,
+  searchQuery = "",
+  onSearchChange,
 }) => {
-  const [isStaffMenuOpen, setIsStaffMenuOpen] = useState<boolean>(false);
-  const staffMenuRef = useRef<HTMLDivElement>(null);
+  const [isSearchExpanded, setIsSearchExpanded] = useState<boolean>(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (staffMenuRef.current && !staffMenuRef.current.contains(e.target as Node)) {
-        setIsStaffMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    if (isSearchExpanded && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [isSearchExpanded]);
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200/80 shadow-2xs">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E5E7EB] shadow-xs">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
-        {/* Brand / Store tag */}
-        <div className="flex items-center gap-2">
+        {/* Left: Brand Logo + Name ("Artisan Brew & Kitchen") */}
+        <div
+          className={`flex items-center gap-2.5 shrink-0 transition-opacity duration-200 ${
+            isSearchExpanded ? "hidden xs:flex" : "flex"
+          }`}
+        >
           <div className="h-8 w-8 rounded-xl bg-[#00A86B] flex items-center justify-center text-white shadow-xs font-bold text-sm">
             ☕
           </div>
-          <span className="font-extrabold text-sm sm:text-base tracking-tight text-stone-900">
+          <span className="font-bold text-[16px] leading-[24px] tracking-tight text-[#1F2937]">
             Artisan Brew & Kitchen
           </span>
         </div>
 
-        {/* Right Action Icons: Live tracker, Receipts, Staff Hub, Cart */}
-        <div className="flex items-center gap-2">
-          {/* Active Order Live Tracker */}
-          {activeOrder && (
+        {/* Right: Search Icon that expands horizontally into an active search input field when clicked */}
+        <div className="flex items-center gap-2 justify-end flex-1">
+          {isSearchExpanded ? (
+            <div className="flex items-center gap-2 w-full max-w-md animate-in fade-in slide-in-from-right-3 duration-200">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280]" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => onSearchChange?.(e.target.value)}
+                  placeholder="Search coffee, pastries, pasta..."
+                  className="w-full bg-[#F7F9FA] border border-[#E5E7EB] rounded-xl pl-9 pr-8 py-2 text-[12px] leading-[18px] text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#00A86B] focus:border-transparent transition-all"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => onSearchChange?.("")}
+                    aria-label="Clear search"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 rounded-full bg-stone-200 text-stone-600 flex items-center justify-center text-[10px] hover:bg-stone-300 transition-colors cursor-pointer"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSearchExpanded(false);
+                  onSearchChange?.("");
+                }}
+                aria-label="Close search"
+                className="h-8 w-8 rounded-xl bg-stone-100 hover:bg-stone-200 text-[#6B7280] flex items-center justify-center transition-colors cursor-pointer shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
             <button
-              onClick={() => onSelectActiveOrder(activeOrder)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 transition-all cursor-pointer animate-pulse"
-              title="View Active Order"
+              type="button"
+              onClick={() => setIsSearchExpanded(true)}
+              aria-label="Search Menu"
+              title="Search Menu"
+              className="h-9 w-9 rounded-xl bg-[#F7F9FA] hover:bg-stone-100 border border-[#E5E7EB] text-[#1F2937] flex items-center justify-center transition-colors cursor-pointer"
             >
-              <span className="h-2 w-2 rounded-full bg-[#00A86B] animate-ping" />
-              <span>{activeOrder.orderNumber}</span>
+              <Search className="h-4 w-4" />
             </button>
           )}
-
-          {/* Receipts */}
-          <button
-            onClick={onOpenReceipts}
-            aria-label="Receipts"
-            className="h-9 w-9 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 flex items-center justify-center transition-colors cursor-pointer"
-            title="Receipts & History"
-          >
-            <Receipt className="h-4 w-4" />
-          </button>
-
-          {/* Staff Hub Quick Menu (KDS, POS, Admin) */}
-          <div className="relative" ref={staffMenuRef}>
-            <button
-              onClick={() => setIsStaffMenuOpen((prev) => !prev)}
-              aria-label="Staff Terminal Access"
-              className="h-9 px-2.5 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 flex items-center gap-1 transition-colors cursor-pointer text-xs font-bold"
-              title="Staff Terminal Access (KDS / POS / Admin)"
-            >
-              <ChefHat className="h-4 w-4 text-[#00A86B]" />
-              <span className="hidden sm:inline">Staff</span>
-              <ChevronDown className="h-3 w-3 text-stone-400" />
-            </button>
-
-            {isStaffMenuOpen && (
-              <div className="absolute right-0 mt-2 w-52 bg-stone-900 border border-stone-800 rounded-2xl shadow-xl p-1.5 z-50 text-stone-200 text-xs animate-in fade-in slide-in-from-top-2">
-                <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-stone-400 border-b border-stone-800/80">
-                  Protected Staff Portals
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsStaffMenuOpen(false);
-                    navigate("/kds");
-                  }}
-                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-stone-800 flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <ChefHat className="h-4 w-4 text-emerald-400 shrink-0" />
-                  <div>
-                    <div className="font-bold text-white">Kitchen KDS</div>
-                    <div className="text-[10px] text-stone-400">Live 4-column ticket board</div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsStaffMenuOpen(false);
-                    navigate("/pos");
-                  }}
-                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-stone-800 flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <CreditCard className="h-4 w-4 text-emerald-400 shrink-0" />
-                  <div>
-                    <div className="font-bold text-white">Cashier POS</div>
-                    <div className="text-[10px] text-stone-400">Register & Change calculator</div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsStaffMenuOpen(false);
-                    navigate("/admin");
-                  }}
-                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-stone-800 flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <LayoutDashboard className="h-4 w-4 text-purple-400 shrink-0" />
-                  <div>
-                    <div className="font-bold text-white">Store Admin</div>
-                    <div className="text-[10px] text-stone-400">Sales metrics, orders & PINs</div>
-                  </div>
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Cart Icon button */}
-          <button
-            onClick={onOpenCart}
-            aria-label="View Cart"
-            className="relative h-9 px-3 rounded-full bg-[#00A86B] hover:bg-emerald-700 text-white flex items-center gap-1.5 font-bold text-xs shadow-xs transition-transform active:scale-95 cursor-pointer"
-          >
-            <ShoppingBag className="h-4 w-4" />
-            {cartCount > 0 ? (
-              <span>{cartCount}</span>
-            ) : (
-              <span className="hidden xs:inline">Basket</span>
-            )}
-          </button>
         </div>
       </div>
     </header>

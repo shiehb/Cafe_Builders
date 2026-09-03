@@ -8,7 +8,6 @@ interface SpecialtySectionProps {
   products: Product[];
   onSelectProduct: (product: Product) => void;
   onQuickAdd: (product: Product) => void;
-  onFullView?: () => void;
   isGrid?: boolean;
   onToggleViewMode?: () => void;
 }
@@ -18,7 +17,6 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
   products,
   onSelectProduct,
   onQuickAdd,
-  onFullView,
   isGrid = false,
   onToggleViewMode,
 }) => {
@@ -45,12 +43,12 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
   return (
     <section className="w-full">
       {/* Section Header */}
-      <div className="flex items-center justify-between px-4 sm:px-0 mb-3.5">
+      <div className="flex items-center justify-between px-4 sm:px-0 mb-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg sm:text-xl font-extrabold text-stone-900 tracking-tight">
+          <h2 className="text-[16px] font-bold text-[#1F2937] leading-[24px]">
             {title}
           </h2>
-          <span className="text-xs font-semibold text-stone-400 bg-stone-100 px-2 py-0.5 rounded-full">
+          <span className="text-[10px] font-medium text-[#6B7280] bg-stone-100 px-2 py-0.5 rounded-full">
             {products.length}
           </span>
         </div>
@@ -58,15 +56,15 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
         <div className="flex items-center gap-2">
           {/* Layout Toggle (2-Col Grid vs 1-Col List) */}
           {onToggleViewMode && (
-            <div className="flex items-center bg-stone-100 p-0.5 rounded-xl border border-stone-200/60">
+            <div className="flex items-center bg-stone-100 p-0.5 rounded-xl border border-[#E5E7EB]">
               <button
                 type="button"
                 onClick={onToggleViewMode}
                 aria-label="List View"
                 className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                   !isGrid
-                    ? "bg-white text-[#00A86B] shadow-2xs"
-                    : "text-stone-400 hover:text-stone-700"
+                    ? "bg-white text-[#00A86B] shadow-xs"
+                    : "text-[#6B7280] hover:text-[#1F2937]"
                 }`}
               >
                 <List className="h-3.5 w-3.5" />
@@ -77,23 +75,13 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
                 aria-label="2-Column Grid View"
                 className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                   isGrid
-                    ? "bg-white text-[#00A86B] shadow-2xs"
-                    : "text-stone-400 hover:text-stone-700"
+                    ? "bg-white text-[#00A86B] shadow-xs"
+                    : "text-[#6B7280] hover:text-[#1F2937]"
                 }`}
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
               </button>
             </div>
-          )}
-
-          {onFullView && (
-            <button
-              onClick={onFullView}
-              className="inline-flex items-center gap-0.5 text-xs sm:text-sm font-bold text-[#00A86B] hover:text-emerald-700 transition-colors cursor-pointer"
-            >
-              <span>Full View</span>
-              <ChevronRight className="h-4 w-4" />
-            </button>
           )}
         </div>
       </div>
@@ -212,26 +200,23 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
           })}
         </div>
       ) : (
-        /* SINGLE VERTICAL LIST OF HORIZONTAL CARDS */
-        <div className="flex flex-col gap-3 px-4 sm:px-0">
+        /* SINGLE VERTICAL LIST OF HORIZONTAL CARDS: Square thumbnail, Title, Subtitle, Price, Quick Add button */
+        <div className="flex flex-col gap-2.5 px-4 sm:px-0">
           {products.map((product) => {
             const isFav = favorites[product.id];
-            const rating = product.rating || 4.9;
-            const reviewCount = product.reviewCount || 120;
-            const prepTime = product.prepTimeMinutes || 4;
 
             return (
               <div
                 key={product.id}
                 onClick={() => onSelectProduct(product)}
-                className="bg-white rounded-2xl p-3 sm:p-3.5 border border-stone-200/70 shadow-2xs hover:shadow-md transition-all duration-200 flex items-center justify-between gap-3 sm:gap-4 cursor-pointer group"
+                className="bg-white rounded-2xl p-3 border border-[#E5E7EB] shadow-card hover:border-emerald-300 transition-all duration-200 flex items-center justify-between gap-3.5 cursor-pointer group"
               >
-                {/* Left Column: Image Thumbnail with Heart Overlay */}
-                <div className="relative h-20 w-20 sm:h-24 sm:w-24 flex-shrink-0 rounded-xl overflow-hidden bg-stone-100">
+                {/* Left Column: Square Image Thumbnail with Heart Overlay */}
+                <div className="relative h-20 w-20 flex-shrink-0 rounded-xl overflow-hidden bg-stone-100">
                   <img
                     src={product.imageUrl}
                     alt={product.name}
-                    className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
                     loading="lazy"
                   />
 
@@ -250,37 +235,20 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
                   </button>
                 </div>
 
-                {/* Middle Column: Bold Title, Rating & Prep Time, Large Bold Price */}
+                {/* Middle Column: Title, Subtitle, Price */}
                 <div className="flex-1 min-w-0 pr-1">
-                  <h3 className="font-bold text-sm sm:text-base text-stone-900 group-hover:text-[#00A86B] transition-colors line-clamp-1">
+                  <h3 className="font-semibold text-[14px] leading-[20px] text-[#1F2937] group-hover:text-[#00A86B] transition-colors line-clamp-1">
                     {product.name}
                   </h3>
-
-                  {/* Rating & Prep Time: ★ 4.9 (140) · 4 min */}
-                  <div className="flex items-center gap-1.5 mt-1 text-xs text-stone-500">
-                    <div className="flex items-center gap-0.5 text-amber-500 font-semibold">
-                      <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                      <span>{rating.toFixed(1)}</span>
-                    </div>
-                    <span className="text-stone-400 font-normal">({reviewCount})</span>
-                    <span className="text-stone-300">·</span>
-                    <span className="text-stone-500 font-medium">{prepTime} min</span>
-                  </div>
-
-                  {/* Large Bold Price with Optional Strikethrough */}
-                  <div className="flex items-baseline gap-2 mt-2">
-                    <span className="text-base sm:text-lg font-extrabold text-stone-900 tracking-tight">
-                      {formatPrice(product.price)}
-                    </span>
-                    {product.originalPrice && (
-                      <span className="text-xs sm:text-sm text-stone-400 line-through font-medium">
-                        {formatPrice(product.originalPrice)}
-                      </span>
-                    )}
+                  <p className="text-[12px] leading-[18px] text-[#6B7280] line-clamp-1 mt-0.5">
+                    {product.description}
+                  </p>
+                  <div className="mt-1.5 font-bold text-[14px] leading-[20px] text-[#1F2937]">
+                    {formatPrice(product.price)}
                   </div>
                 </div>
 
-                {/* Right Side: Large Circular Dark Green "+" Action Button */}
+                {/* Right Side: Circular Dark Green "+" Action Button */}
                 <div className="flex-shrink-0">
                   <button
                     type="button"
@@ -297,9 +265,9 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
                       }
                     }}
                     aria-label={`Add ${product.name}`}
-                    className="h-10 w-10 sm:h-11 sm:w-11 rounded-full bg-[#00A86B] hover:bg-emerald-700 active:scale-95 text-white flex items-center justify-center shadow-xs transition-transform cursor-pointer"
+                    className="h-9 w-9 rounded-full bg-[#00A86B] hover:bg-[#008F5B] active:scale-95 text-white flex items-center justify-center shadow-xs transition-colors cursor-pointer"
                   >
-                    <Plus className="h-5 w-5 stroke-[2.5]" />
+                    <Plus className="h-4.5 w-4.5 stroke-[2.5]" />
                   </button>
                 </div>
               </div>

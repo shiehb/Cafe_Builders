@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { CartItem, Product, ItemCustomization, Order, OrderType } from "../types";
-import { ToastNotification } from "../components/ui/ToastNotification";
 
 const LOCAL_STORAGE_CART_KEY = "cafe_customer_cart_v2";
 const LOCAL_STORAGE_ORDERS_KEY = "cafe_orders_history";
@@ -19,6 +18,12 @@ interface CartContextType {
     customizationsExtraPrice: number
   ) => void;
   updateQuantity: (cartItemId: string, newQty: number) => void;
+  updateCartItem: (
+    oldItemId: string,
+    quantity: number,
+    customizations: ItemCustomization,
+    customizationsExtraPrice: number
+  ) => void;
   removeFromCart: (cartItemId: string) => void;
   clearCart: () => void;
   savedOrders: Order[];
@@ -30,12 +35,43 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | null>(null);
 
+const generateCartItemId = (prefix = "ci") => {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+};
+
+const getCustomizationSig = (prodId: string, cust: ItemCustomization) => {
+  return `${prodId}|${cust.iceLevel || ""}|${cust.sweetness || ""}|${cust.milkOption || ""}|${(
+    cust.addOns || []
+  )
+    .slice()
+    .sort()
+    .join(",")}|${cust.specialInstructions || ""}`;
+};
+
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // 1. Cart state
+  // 1. Cart state with ID sanitization
   const [cart, setCart] = useState<CartItem[]>(() => {
     try {
       const stored = localStorage.getItem(LOCAL_STORAGE_CART_KEY);
-      return stored ? JSON.parse(stored) : [];
+      if (!stored) return [];
+      const parsed = JSON.parse(stored);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map((item, idx) => {
+        // Ensure every item has a clean, URL-safe alphanumeric ID
+        if (
+          !item.id ||
+          item.id.includes(" ") ||
+          item.id.includes("+") ||
+          item.id.includes("₱") ||
+          item.id.includes("%")
+        ) {
+          return {
+            ...item,
+            id: generateCartItemId(`item_${idx}`),
+          };
+        }
+        return item;
+      });
     } catch {
       return [];
     }
@@ -67,14 +103,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
-  // 5. Toast state
-  const [toast, setToast] = useState<{
-    message: string;
-    type: "success" | "error" | "info";
-  } | null>(null);
-
-  const showToast = useCallback((message: string, type: "success" | "error" | "info" = "success") => {
-    setToast({ message, type });
+  // Notifications suppressed per user request
+  const showToast = useCallback((_message: string, _type: "success" | "error" | "info" = "success") => {
+    // Intentionally no-op to remove all popup notifications
   }, []);
 
   // Persist cart to localStorage
@@ -108,15 +139,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ) => {
       const unitPrice = product.price + customizationsExtraPrice;
       const lineTotal = unitPrice * quantity;
-
-      const customKey = `${product.id}-${customizations.iceLevel || ""}-${
-        customizations.sweetness || ""
-      }-${customizations.milkOption || ""}-${customizations.addOns?.join(",") || ""}-${
-        customizations.specialInstructions || ""
-      }`;
+      const sig = getCustomizationSig(product.id, customizations);
 
       setCart((prev) => {
-        const existingIdx = prev.findIndex((item) => item.id === customKey);
+        const existingIdx = prev.findIndex(
+          (item) => getCustomizationSig(item.productId, item.customizations) === sig
+        );
         if (existingIdx > -1) {
           const updated = [...prev];
           const newQty = updated[existingIdx].quantity + quantity;
@@ -129,7 +157,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         const newItem: CartItem = {
-          id: customKey,
+          id: generateCartItemId(),
           productId: product.id,
           product,
           quantity,
@@ -140,47 +168,98 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
         return [...prev, newItem];
       });
-
-      showToast(`Added "${product.name}" (${quantity}) to tray`, "success");
     },
-    [showToast]
+    []
   );
 
   const updateQuantity = useCallback((cartItemId: string, newQty: number) => {
+    const normalizedTarget = decodeURIComponent(cartItemId).trim().toLowerCase();
     if (newQty <= 0) {
-      setCart((prev) => prev.filter((item) => item.id !== cartItemId));
+      setCart((prev) =>
+        prev.filter((item) => {
+          return (
+            item.id !== cartItemId &&
+            decodeURIComponent(item.id) !== decodeURIComponent(cartItemId) &&
+            item.id.toLowerCase() !== normalizedTarget
+          );
+        })
+      );
       return;
     }
     setCart((prev) =>
-      prev.map((item) =>
-        item.id === cartItemId
+      prev.map((item) => {
+        const isMatch =
+          item.id === cartItemId ||
+          decodeURIComponent(item.id) === decodeURIComponent(cartItemId) ||
+          item.id.toLowerCase() === normalizedTarget;
+
+        return isMatch
           ? {
               ...item,
               quantity: newQty,
               lineTotal: item.unitPrice * newQty,
             }
-          : item
+          : item;
+      })
+    );
+  }, []);
+
+  const updateCartItem = useCallback(
+    (
+      oldItemId: string,
+      quantity: number,
+      customizations: ItemCustomization,
+      customizationsExtraPrice: number
+    ) => {
+      setCart((prev) => {
+        const normalizedOld = decodeURIComponent(oldItemId).trim().toLowerCase();
+        const itemToUpdate = prev.find((i) => {
+          if (i.id === oldItemId) return true;
+          if (decodeURIComponent(i.id) === decodeURIComponent(oldItemId)) return true;
+          if (i.id.toLowerCase() === normalizedOld) return true;
+          if (decodeURIComponent(i.id).toLowerCase() === normalizedOld) return true;
+          return false;
+        });
+
+        if (!itemToUpdate) return prev;
+        const product = itemToUpdate.product;
+        const unitPrice = product.price + customizationsExtraPrice;
+        const lineTotal = unitPrice * quantity;
+
+        const updated = prev.map((item) => {
+          if (item.id === itemToUpdate.id) {
+            return {
+              ...item,
+              quantity,
+              unitPrice,
+              customizations,
+              customizationsTotal: customizationsExtraPrice,
+              lineTotal,
+            };
+          }
+          return item;
+        });
+        return updated;
+      });
+    },
+    []
+  );
+
+  const removeFromCart = useCallback((cartItemId: string) => {
+    const normalizedTarget = decodeURIComponent(cartItemId).trim().toLowerCase();
+    setCart((prev) =>
+      prev.filter(
+        (item) =>
+          item.id !== cartItemId &&
+          decodeURIComponent(item.id) !== decodeURIComponent(cartItemId) &&
+          item.id.toLowerCase() !== normalizedTarget
       )
     );
   }, []);
 
-  const removeFromCart = useCallback(
-    (cartItemId: string) => {
-      setCart((prev) => {
-        const target = prev.find((i) => i.id === cartItemId);
-        if (target) {
-          showToast(`Removed "${target.product.name}" from tray`, "info");
-        }
-        return prev.filter((item) => item.id !== cartItemId);
-      });
-    },
-    [showToast]
-  );
-
   const clearCart = useCallback(() => {
     setCart([]);
-    showToast("Cleared tray", "info");
-  }, [showToast]);
+  }, []);
 
   const saveOrder = useCallback(
     (order: Order) => {
@@ -208,8 +287,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearOrderHistory = useCallback(() => {
     persistOrders([]);
-    showToast("Order history cleared", "info");
-  }, [persistOrders, showToast]);
+  }, [persistOrders]);
 
   return (
     <CartContext.Provider
@@ -221,6 +299,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setOrderType,
         addToCart,
         updateQuantity,
+        updateCartItem,
         removeFromCart,
         clearCart,
         savedOrders,
@@ -231,13 +310,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }}
     >
       {children}
-      {toast && (
-        <ToastNotification
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
     </CartContext.Provider>
   );
 };

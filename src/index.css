@@ -1,7 +1,37 @@
 @import "tailwindcss";
 
-/* Global Scrollbar Suppression while maintaining smooth scrolling & touch dragging */
+@layer base {
+  :root {
+    --brand-primary: #00A86B;
+    --brand-primary-hover: #008F5B;
+    --brand-primary-light: #E6F6F0;
+    --bg-app: #F7F9FA;
+    --bg-surface: #FFFFFF;
+    --border-subtle: #E5E7EB;
+    --text-primary: #1F2937;
+    --text-secondary: #6B7280;
+    --text-inverse: #FFFFFF;
+    --status-badge-bg: #FEF3C7;
+    --status-badge-text: #92400E;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+  }
+}
+
+/* Design System Utilities */
 @layer utilities {
+  .shadow-card {
+    box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.04);
+  }
+
+  .shadow-footer {
+    box-shadow: 0px -4px 16px rgba(0, 0, 0, 0.06);
+  }
+
   /* Utility class to hide scrollbars on any element */
   .no-scrollbar,
   .scrollbar-none {

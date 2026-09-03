@@ -25,7 +25,7 @@ export function navigate(path: string, options?: { replace?: boolean }) {
 export function usePath(): string {
   const [currentPath, setCurrentPath] = useState<string>(() => {
     if (typeof window !== "undefined") {
-      return window.location.pathname.toLowerCase() || "/";
+      return window.location.pathname || "/";
     }
     return "/";
   });
@@ -34,7 +34,7 @@ export function usePath(): string {
     if (typeof window === "undefined") return;
 
     const handleLocationChange = () => {
-      const cleanPath = window.location.pathname.toLowerCase() || "/";
+      const cleanPath = window.location.pathname || "/";
       setCurrentPath(cleanPath);
     };
 
@@ -54,6 +54,7 @@ export type RouteInfo =
   | { type: "home" }
   | { type: "item"; id: string }
   | { type: "cart" }
+  | { type: "cart_edit"; id: string }
   | { type: "checkout" }
   | { type: "order"; id: string }
   | { type: "kds" }
@@ -72,6 +73,11 @@ export function parseRoute(pathname: string): RouteInfo {
   }
   if (lower === "/cart") {
     return { type: "cart" };
+  }
+  // /cart/edit/:id
+  const cartEditMatch = clean.match(/^\/cart\/edit\/(.+)$/i);
+  if (cartEditMatch) {
+    return { type: "cart_edit", id: decodeURIComponent(cartEditMatch[1]) };
   }
   if (lower === "/checkout") {
     return { type: "checkout" };
