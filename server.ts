@@ -20,6 +20,7 @@ dotenv.config();
 
 const app = express();
 const PORT = 3000;
+export { app };
 
 // Initialize & seed database if empty
 seedDatabaseIfEmpty().catch((err) => {
@@ -919,4 +920,6 @@ async function startServer() {
   });
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+}

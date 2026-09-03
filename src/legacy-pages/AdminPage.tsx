@@ -382,7 +382,7 @@ export function AdminPage() {
             type="button"
             onClick={fetchOrders}
             disabled={isLoading}
-            className="p-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-800 transition-all cursor-pointer"
+            className="p-2 rounded-xl bg-white hover:bg-[#F7F9FA] text-[#374151] border border-[#E5E7EB] transition-all cursor-pointer"
             title="Refresh analytics data"
           >
             <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin text-[#00A86B]")} />
@@ -393,22 +393,22 @@ export function AdminPage() {
           {/* TOP METRICS CARDS */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
             {/* Metric 1: Total Revenue */}
-            <div className="bg-stone-900 border border-stone-800/90 rounded-2xl p-4 shadow-sm">
-              <div className="flex items-center justify-between text-stone-400 mb-1">
+            <div className="bg-white border border-[#E5E7EB]/90 rounded-2xl p-4 shadow-sm">
+              <div className="flex items-center justify-between text-[#6B7280] mb-1">
                 <span className="text-[11px] font-bold uppercase tracking-wider">Gross Sales</span>
                 <span className="h-7 w-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
                   <DollarSign className="h-4 w-4" />
                 </span>
               </div>
-              <div className="text-xl sm:text-2xl font-black font-mono text-white tracking-tight">
+              <div className="text-xl sm:text-2xl font-black font-mono text-[#1F2937] tracking-tight">
                 {formatPrice(metrics.totalGross)}
               </div>
-              <p className="text-[10px] text-stone-500 mt-1">Across {metrics.totalOrders} total orders</p>
+              <p className="text-[10px] text-[#6B7280] mt-1">Across {metrics.totalOrders} total orders</p>
             </div>
 
             {/* Metric 2: Active Orders */}
-            <div className="bg-stone-900 border border-stone-800/90 rounded-2xl p-4 shadow-sm">
-              <div className="flex items-center justify-between text-stone-400 mb-1">
+            <div className="bg-white border border-[#E5E7EB]/90 rounded-2xl p-4 shadow-sm">
+              <div className="flex items-center justify-between text-[#6B7280] mb-1">
                 <span className="text-[11px] font-bold uppercase tracking-wider">Active Queue</span>
                 <span className="h-7 w-7 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
                   <Clock className="h-4 w-4" />
@@ -417,50 +417,50 @@ export function AdminPage() {
               <div className="text-xl sm:text-2xl font-black font-mono text-amber-400 tracking-tight">
                 {metrics.activeCount}
               </div>
-              <p className="text-[10px] text-stone-500 mt-1">In kitchen or pending payment</p>
+              <p className="text-[10px] text-[#6B7280] mt-1">In kitchen or pending payment</p>
             </div>
 
             {/* Metric 3: Completed Orders */}
-            <div className="bg-stone-900 border border-stone-800/90 rounded-2xl p-4 shadow-sm">
-              <div className="flex items-center justify-between text-stone-400 mb-1">
+            <div className="bg-white border border-[#E5E7EB]/90 rounded-2xl p-4 shadow-sm">
+              <div className="flex items-center justify-between text-[#6B7280] mb-1">
                 <span className="text-[11px] font-bold uppercase tracking-wider">Completed</span>
                 <span className="h-7 w-7 rounded-lg bg-sky-500/10 text-sky-400 flex items-center justify-center">
                   <CheckCircle2 className="h-4 w-4" />
                 </span>
               </div>
-              <div className="text-xl sm:text-2xl font-black font-mono text-white tracking-tight">
+              <div className="text-xl sm:text-2xl font-black font-mono text-[#1F2937] tracking-tight">
                 {metrics.completedCount}
               </div>
-              <p className="text-[10px] text-stone-500 mt-1">Served and closed</p>
+              <p className="text-[10px] text-[#6B7280] mt-1">Served and closed</p>
             </div>
 
             {/* Metric 4: Avg Ticket */}
-            <div className="bg-stone-900 border border-stone-800/90 rounded-2xl p-4 shadow-sm">
-              <div className="flex items-center justify-between text-stone-400 mb-1">
+            <div className="bg-white border border-[#E5E7EB]/90 rounded-2xl p-4 shadow-sm">
+              <div className="flex items-center justify-between text-[#6B7280] mb-1">
                 <span className="text-[11px] font-bold uppercase tracking-wider">Avg Ticket</span>
                 <span className="h-7 w-7 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center">
                   <TrendingUp className="h-4 w-4" />
                 </span>
               </div>
-              <div className="text-xl sm:text-2xl font-black font-mono text-white tracking-tight">
+              <div className="text-xl sm:text-2xl font-black font-mono text-[#1F2937] tracking-tight">
                 {formatPrice(metrics.avgTicket)}
               </div>
-              <p className="text-[10px] text-stone-500 mt-1">
+              <p className="text-[10px] text-[#6B7280] mt-1">
                 QR Ph: {metrics.qrPhPercentage}% | Cash: {metrics.cashPercentage}%
               </p>
             </div>
           </div>
 
           {/* TAB SELECTOR */}
-          <div className="flex items-center gap-2 border-b border-stone-800 pb-2">
+          <div className="flex items-center gap-2 border-b border-[#E5E7EB] pb-2">
             <button
               type="button"
               onClick={() => setActiveTab("orders")}
               className={cn(
                 "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer",
                 activeTab === "orders"
-                  ? "bg-stone-800 text-white border border-stone-700 shadow-xs"
-                  : "text-stone-400 hover:text-stone-200"
+                  ? "bg-[#00A86B] text-white border border-[#D1D5DB] shadow-xs"
+                  : "text-[#6B7280] hover:text-[#1F2937]"
               )}
             >
               Order Audit Log ({orders.length})
@@ -472,8 +472,8 @@ export function AdminPage() {
               className={cn(
                 "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
                 activeTab === "menu"
-                  ? "bg-stone-800 text-white border border-stone-700 shadow-xs"
-                  : "text-stone-400 hover:text-stone-200"
+                  ? "bg-[#00A86B] text-white border border-[#D1D5DB] shadow-xs"
+                  : "text-[#6B7280] hover:text-[#1F2937]"
               )}
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -487,7 +487,7 @@ export function AdminPage() {
                 "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
                 activeTab === "access"
                   ? "bg-[#00A86B]/20 text-[#00A86B] border border-[#00A86B]/40 shadow-xs"
-                  : "text-stone-400 hover:text-stone-200"
+                  : "text-[#6B7280] hover:text-[#1F2937]"
               )}
             >
               <KeyRound className="h-3.5 w-3.5" />
@@ -497,17 +497,17 @@ export function AdminPage() {
 
           {/* TAB 1: ORDER AUDIT LOG */}
           {activeTab === "orders" && (
-            <div className="bg-stone-900 border border-stone-800 rounded-3xl p-4 sm:p-5 space-y-4 shadow-sm">
+            <div className="bg-white border border-[#E5E7EB] rounded-3xl p-4 sm:p-5 space-y-4 shadow-sm">
               {/* Filter & Search */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                 <div className="relative w-full sm:w-72">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-stone-500" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#6B7280]" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search Order # or Customer..."
-                    className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-stone-950 border border-stone-800 text-stone-100 text-xs focus:outline-none focus:border-[#00A86B]"
+                    className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-white border border-[#E5E7EB] text-[#1F2937] text-xs focus:outline-none focus:border-[#00A86B]"
                   />
                 </div>
 
@@ -521,7 +521,7 @@ export function AdminPage() {
                         "px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 transition-all cursor-pointer",
                         statusFilter === st
                           ? "bg-[#00A86B] text-white"
-                          : "bg-stone-800/80 text-stone-400 hover:text-stone-200"
+                          : "bg-[#F7F9FA]/80 text-[#6B7280] hover:text-[#1F2937]"
                       )}
                     >
                       {st.replace("_", " ")}
@@ -532,8 +532,8 @@ export function AdminPage() {
 
               {/* Orders Table */}
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-stone-300">
-                  <thead className="bg-stone-950 text-stone-400 uppercase text-[10px] tracking-wider border-b border-stone-800">
+                <table className="w-full text-left text-xs text-[#374151]">
+                  <thead className="bg-white text-[#6B7280] uppercase text-[10px] tracking-wider border-b border-[#E5E7EB]">
                     <tr>
                       <th className="py-2.5 px-3">Order #</th>
                       <th className="py-2.5 px-3">Time</th>
@@ -544,25 +544,25 @@ export function AdminPage() {
                       <th className="py-2.5 px-3 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-stone-800/60 font-medium">
+                  <tbody className="divide-y divide-[#E5E7EB]/60 font-medium">
                     {filteredOrders.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="text-center py-8 text-stone-500">
+                        <td colSpan={7} className="text-center py-8 text-[#6B7280]">
                           No orders matched your criteria.
                         </td>
                       </tr>
                     ) : (
                       filteredOrders.map((ord) => (
-                        <tr key={ord.id} className="hover:bg-stone-950/40 transition-colors">
-                          <td className="py-3 px-3 font-mono font-bold text-white">
+                        <tr key={ord.id} className="hover:bg-white/40 transition-colors">
+                          <td className="py-3 px-3 font-mono font-bold text-[#1F2937]">
                             {ord.orderNumber}
                           </td>
-                          <td className="py-3 px-3 text-stone-400 text-[11px]">
+                          <td className="py-3 px-3 text-[#6B7280] text-[11px]">
                             {formatDateTime(ord.createdAt)}
                           </td>
                           <td className="py-3 px-3">
-                            <span className="text-stone-200 font-semibold">{ord.customerName}</span>
-                            <span className="block text-[10px] text-stone-500">
+                            <span className="text-[#1F2937] font-semibold">{ord.customerName}</span>
+                            <span className="block text-[10px] text-[#6B7280]">
                               {ord.orderType} · {ord.items.length} items
                             </span>
                           </td>
@@ -570,13 +570,13 @@ export function AdminPage() {
                             {ord.paymentMethod === "QRPH" ? (
                               <span className="text-emerald-400 font-semibold">PayMongo QR Ph</span>
                             ) : (
-                              <span className="text-stone-300">Cash</span>
+                              <span className="text-[#374151]">Cash</span>
                             )}
                           </td>
                           <td className="py-3 px-3">
                             <Badge status={ord.status} className="scale-85 origin-left" />
                           </td>
-                          <td className="py-3 px-3 text-right font-mono font-bold text-white">
+                          <td className="py-3 px-3 text-right font-mono font-bold text-[#1F2937]">
                             {formatPrice(ord.totalAmount)}
                           </td>
                           <td className="py-3 px-3 text-right">
@@ -585,7 +585,7 @@ export function AdminPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleUpdateOrderStatus(ord.id, "COMPLETED")}
-                                  className="px-2 py-0.5 rounded bg-stone-800 hover:bg-emerald-600 hover:text-white text-[10px] font-bold text-stone-300 cursor-pointer transition-colors"
+                                  className="px-2 py-0.5 rounded bg-[#F7F9FA] hover:bg-emerald-600 hover:text-[#1F2937] text-[10px] font-bold text-[#374151] cursor-pointer transition-colors"
                                 >
                                   Complete
                                 </button>
@@ -594,7 +594,7 @@ export function AdminPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleUpdateOrderStatus(ord.id, "READY")}
-                                  className="px-2 py-0.5 rounded bg-stone-800 hover:bg-stone-700 text-[10px] text-stone-400 cursor-pointer"
+                                  className="px-2 py-0.5 rounded bg-[#F7F9FA] hover:bg-[#E6F6F0] text-[10px] text-[#6B7280] cursor-pointer"
                                 >
                                   Reopen
                                 </button>
@@ -614,16 +614,16 @@ export function AdminPage() {
           {activeTab === "menu" && (
             <div className="space-y-6">
               {/* Header & Quick Action Bar */}
-              <div className="bg-stone-900 border border-stone-800 rounded-3xl p-5 shadow-sm space-y-4">
+              <div className="bg-white border border-[#E5E7EB] rounded-3xl p-5 shadow-sm space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="p-1.5 rounded-xl bg-emerald-500/10 text-emerald-400">
                         <Coffee className="h-4 w-4" />
                       </span>
-                      <h3 className="font-black text-base text-white">Live Inventory & Menu Management</h3>
+                      <h3 className="font-black text-base text-[#1F2937]">Live Inventory & Menu Management</h3>
                     </div>
-                    <p className="text-xs text-stone-400 mt-1">
+                    <p className="text-xs text-[#6B7280] mt-1">
                       Toggle item availability in real-time or update pricing. All changes broadcast immediately to Customer Menu, POS, and KDS terminals.
                     </p>
                   </div>
@@ -640,7 +640,7 @@ export function AdminPage() {
                     <button
                       type="button"
                       onClick={fetchProducts}
-                      className="px-3 py-1.5 rounded-xl bg-stone-950 hover:bg-stone-800 text-stone-300 text-xs font-semibold border border-stone-800 flex items-center gap-2 transition-all cursor-pointer"
+                      className="px-3 py-1.5 rounded-xl bg-white hover:bg-[#F7F9FA] text-[#374151] text-xs font-semibold border border-[#E5E7EB] flex items-center gap-2 transition-all cursor-pointer"
                     >
                       <RefreshCw className="h-3.5 w-3.5 text-[#00A86B]" />
                       <span>Sync</span>
@@ -650,47 +650,47 @@ export function AdminPage() {
 
                 {/* Real-time Inventory Metrics */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-                  <div className="bg-stone-950/80 border border-stone-800/80 rounded-2xl p-3">
-                    <span className="text-[10px] uppercase font-bold text-stone-500 block">Total Items</span>
-                    <span className="text-xl font-black font-mono text-white">{productMetrics.total}</span>
-                    <span className="text-[10px] text-stone-500 block mt-0.5">Active catalogue SKUs</span>
+                  <div className="bg-white/80 border border-[#E5E7EB]/80 rounded-2xl p-3">
+                    <span className="text-[10px] uppercase font-bold text-[#6B7280] block">Total Items</span>
+                    <span className="text-xl font-black font-mono text-[#1F2937]">{productMetrics.total}</span>
+                    <span className="text-[10px] text-[#6B7280] block mt-0.5">Active catalogue SKUs</span>
                   </div>
 
-                  <div className="bg-stone-950/80 border border-stone-800/80 rounded-2xl p-3">
+                  <div className="bg-white/80 border border-[#E5E7EB]/80 rounded-2xl p-3">
                     <span className="text-[10px] uppercase font-bold text-emerald-400 block">In Stock</span>
                     <span className="text-xl font-black font-mono text-emerald-400">{productMetrics.inStock}</span>
-                    <span className="text-[10px] text-stone-500 block mt-0.5">Orderable by customers</span>
+                    <span className="text-[10px] text-[#6B7280] block mt-0.5">Orderable by customers</span>
                   </div>
 
-                  <div className="bg-stone-950/80 border border-stone-800/80 rounded-2xl p-3">
+                  <div className="bg-white/80 border border-[#E5E7EB]/80 rounded-2xl p-3">
                     <span className="text-[10px] uppercase font-bold text-rose-400 block">86'd / Sold Out</span>
                     <span className="text-xl font-black font-mono text-rose-400">{productMetrics.soldOut}</span>
-                    <span className="text-[10px] text-stone-500 block mt-0.5">Disabled on customer menu</span>
+                    <span className="text-[10px] text-[#6B7280] block mt-0.5">Disabled on customer menu</span>
                   </div>
 
-                  <div className="bg-stone-950/80 border border-stone-800/80 rounded-2xl p-3">
+                  <div className="bg-white/80 border border-[#E5E7EB]/80 rounded-2xl p-3">
                     <span className="text-[10px] uppercase font-bold text-amber-400 block">Featured / Popular</span>
                     <span className="text-xl font-black font-mono text-amber-400">{productMetrics.popular}</span>
-                    <span className="text-[10px] text-stone-500 block mt-0.5">Highlighted on home carousel</span>
+                    <span className="text-[10px] text-[#6B7280] block mt-0.5">Highlighted on home carousel</span>
                   </div>
                 </div>
 
                 {/* Filter and Search Bar */}
-                <div className="pt-2 border-t border-stone-800/80 flex flex-col md:flex-row gap-3">
+                <div className="pt-2 border-t border-[#E5E7EB]/80 flex flex-col md:flex-row gap-3">
                   <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-500" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280]" />
                     <input
                       type="text"
                       placeholder="Search menu items by name or description..."
                       value={productSearch}
                       onChange={(e) => setProductSearch(e.target.value)}
-                      className="w-full pl-9 pr-8 py-2 rounded-xl bg-stone-950 border border-stone-800 text-xs text-white placeholder-stone-500 focus:outline-none focus:border-[#00A86B]"
+                      className="w-full pl-9 pr-8 py-2 rounded-xl bg-white border border-[#E5E7EB] text-xs text-[#1F2937] placeholder-[#9CA3AF] focus:outline-none focus:border-[#00A86B]"
                     />
                     {productSearch && (
                       <button
                         type="button"
                         onClick={() => setProductSearch("")}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6B7280] hover:text-[#374151]"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
@@ -698,15 +698,15 @@ export function AdminPage() {
                   </div>
 
                   {/* Stock Availability Quick Filter */}
-                  <div className="flex items-center gap-1.5 bg-stone-950 p-1 rounded-xl border border-stone-800">
+                  <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-[#E5E7EB]">
                     <button
                       type="button"
                       onClick={() => setStockFilter("ALL")}
                       className={cn(
                         "px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer",
                         stockFilter === "ALL"
-                          ? "bg-stone-800 text-white shadow-xs"
-                          : "text-stone-400 hover:text-stone-200"
+                          ? "bg-[#00A86B] text-white shadow-xs"
+                          : "text-[#6B7280] hover:text-[#1F2937]"
                       )}
                     >
                       All ({products.length})
@@ -718,7 +718,7 @@ export function AdminPage() {
                         "px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1",
                         stockFilter === "IN_STOCK"
                           ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                          : "text-stone-400 hover:text-stone-200"
+                          : "text-[#6B7280] hover:text-[#1F2937]"
                       )}
                     >
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
@@ -731,7 +731,7 @@ export function AdminPage() {
                         "px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1",
                         stockFilter === "SOLD_OUT"
                           ? "bg-rose-500/20 text-rose-400 border border-rose-500/30"
-                          : "text-stone-400 hover:text-stone-200"
+                          : "text-[#6B7280] hover:text-[#1F2937]"
                       )}
                     >
                       <span className="h-1.5 w-1.5 rounded-full bg-rose-400"></span>
@@ -749,7 +749,7 @@ export function AdminPage() {
                       "px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer",
                       selectedMenuCategory === "all"
                         ? "bg-[#00A86B] text-black font-extrabold shadow-sm"
-                        : "bg-stone-950 text-stone-400 border border-stone-800 hover:text-stone-200"
+                        : "bg-white text-[#6B7280] border border-[#E5E7EB] hover:text-[#1F2937]"
                     )}
                   >
                     All Categories
@@ -767,7 +767,7 @@ export function AdminPage() {
                           "px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5",
                           selectedMenuCategory === cat.id
                             ? "bg-[#00A86B] text-black font-extrabold shadow-sm"
-                            : "bg-stone-950 text-stone-400 border border-stone-800 hover:text-stone-200"
+                            : "bg-white text-[#6B7280] border border-[#E5E7EB] hover:text-[#1F2937]"
                         )}
                       >
                         <span>{cat.name}</span>
@@ -776,7 +776,7 @@ export function AdminPage() {
                             "text-[10px] px-1.5 py-0.2 rounded-full",
                             selectedMenuCategory === cat.id
                               ? "bg-black/20 text-black font-mono font-bold"
-                              : "bg-stone-900 text-stone-500 font-mono"
+                              : "bg-white text-[#6B7280] font-mono"
                           )}
                         >
                           {count}
@@ -789,10 +789,10 @@ export function AdminPage() {
 
               {/* Grouped Product Listings */}
               {Array.from(productsByCategory.entries()).length === 0 ? (
-                <div className="p-12 text-center bg-stone-900 border border-stone-800 rounded-3xl space-y-3">
-                  <Coffee className="h-8 w-8 text-stone-600 mx-auto" />
-                  <p className="text-sm font-bold text-stone-300">No items match your filter</p>
-                  <p className="text-xs text-stone-500">
+                <div className="p-12 text-center bg-white border border-[#E5E7EB] rounded-3xl space-y-3">
+                  <Coffee className="h-8 w-8 text-[#9CA3AF] mx-auto" />
+                  <p className="text-sm font-bold text-[#374151]">No items match your filter</p>
+                  <p className="text-xs text-[#6B7280]">
                     Try changing your search terms or category selection.
                   </p>
                 </div>
@@ -801,7 +801,7 @@ export function AdminPage() {
                   <div key={categoryName} className="space-y-3">
                     <div className="flex items-center gap-2 px-1">
                       <Layers className="h-4 w-4 text-[#00A86B]" />
-                      <h4 className="text-xs font-black uppercase tracking-wider text-stone-300">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-[#374151]">
                         {categoryName} ({items.length})
                       </h4>
                     </div>
@@ -813,8 +813,8 @@ export function AdminPage() {
                           className={cn(
                             "rounded-2xl p-4 border transition-all flex flex-col justify-between gap-3.5 relative",
                             item.isAvailable
-                              ? "bg-stone-900/90 border-stone-800/90 shadow-xs"
-                              : "bg-stone-950/70 border-rose-950/50 opacity-90"
+                              ? "bg-white/90 border-[#E5E7EB]/90 shadow-xs"
+                              : "bg-white/70 border-rose-950/50 opacity-90"
                           )}
                         >
                           <div className="flex items-start gap-3">
@@ -823,13 +823,13 @@ export function AdminPage() {
                                 src={item.imageUrl}
                                 alt={item.name}
                                 className={cn(
-                                  "h-16 w-16 rounded-xl object-cover bg-stone-950 border border-stone-800 shrink-0",
+                                  "h-16 w-16 rounded-xl object-cover bg-white border border-[#E5E7EB] shrink-0",
                                   !item.isAvailable && "grayscale brightness-75"
                                 )}
                               />
                               {item.popular && (
                                 <span
-                                  className="absolute -top-1.5 -right-1.5 bg-amber-500 text-stone-950 p-1 rounded-full shadow-xs"
+                                  className="absolute -top-1.5 -right-1.5 bg-amber-500 text-[#1F2937] p-1 rounded-full shadow-xs"
                                   title="Featured Popular Item"
                                 >
                                   <Flame className="h-3 w-3 fill-stone-950" />
@@ -839,7 +839,7 @@ export function AdminPage() {
 
                             <div className="min-w-0 flex-1">
                               <div className="flex items-start justify-between gap-2">
-                                <h5 className="text-sm font-bold text-white truncate leading-tight">
+                                <h5 className="text-sm font-bold text-[#1F2937] truncate leading-tight">
                                   {item.name}
                                 </h5>
                               </div>
@@ -847,7 +847,7 @@ export function AdminPage() {
                                 {formatPrice(item.price)}
                               </span>
                               {item.description && (
-                                <p className="text-[11px] text-stone-400 line-clamp-2 mt-1 leading-relaxed">
+                                <p className="text-[11px] text-[#6B7280] line-clamp-2 mt-1 leading-relaxed">
                                   {item.description}
                                 </p>
                               )}
@@ -855,7 +855,7 @@ export function AdminPage() {
                           </div>
 
                           {/* Control Footer */}
-                          <div className="pt-3 border-t border-stone-800/80 flex items-center justify-between gap-2">
+                          <div className="pt-3 border-t border-[#E5E7EB]/80 flex items-center justify-between gap-2">
                             {/* Interactive Availability Toggle Switch */}
                             <button
                               type="button"
@@ -902,10 +902,10 @@ export function AdminPage() {
                             <button
                               type="button"
                               onClick={() => navigate(`/admin/products/${item.id}/edit`)}
-                              className="px-2.5 py-1.5 rounded-xl bg-stone-950 hover:bg-stone-800 text-stone-300 text-xs font-semibold border border-stone-800 flex items-center gap-1.5 transition-all cursor-pointer"
+                              className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-[#F7F9FA] text-[#374151] text-xs font-semibold border border-[#E5E7EB] flex items-center gap-1.5 transition-all cursor-pointer"
                               title="Edit item price & details"
                             >
-                              <Pencil className="h-3.5 w-3.5 text-stone-400" />
+                              <Pencil className="h-3.5 w-3.5 text-[#6B7280]" />
                               <span className="hidden sm:inline">Edit Details</span>
                             </button>
                           </div>
@@ -920,118 +920,118 @@ export function AdminPage() {
 
           {/* TAB 3: PASSCODES & SECRET URLS */}
           {activeTab === "access" && (
-            <div className="bg-stone-900 border border-stone-800 rounded-3xl p-4 sm:p-5 space-y-5 shadow-sm">
+            <div className="bg-white border border-[#E5E7EB] rounded-3xl p-4 sm:p-5 space-y-5 shadow-sm">
               <div>
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4 text-[#00A86B]" />
-                  <h3 className="font-black text-sm text-white">Staff Terminal Passcode Security</h3>
+                  <h3 className="font-black text-sm text-[#1F2937]">Staff Terminal Passcode Security</h3>
                 </div>
-                <p className="text-xs text-stone-400 mt-0.5">
+                <p className="text-xs text-[#6B7280] mt-0.5">
                   Terminals are protected by 4-digit PIN access guards. You can also generate direct Secret URLs for hardware tablets or bookmarks.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* KDS Access */}
-                <div className="bg-stone-950 p-4 rounded-2xl border border-stone-800 space-y-3">
+                <div className="bg-white p-4 rounded-2xl border border-[#E5E7EB] space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white uppercase tracking-wider">
+                    <span className="text-xs font-bold text-[#1F2937] uppercase tracking-wider">
                       🍳 Kitchen KDS
                     </span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-stone-900 text-stone-400 border border-stone-800">
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white text-[#6B7280] border border-[#E5E7EB]">
                       KDS_PIN
                     </span>
                   </div>
 
-                  <div className="bg-stone-900/90 p-2.5 rounded-xl border border-stone-800 flex items-center justify-between">
-                    <span className="text-[11px] text-stone-400 font-medium">Terminal PIN:</span>
+                  <div className="bg-white/90 p-2.5 rounded-xl border border-[#E5E7EB] flex items-center justify-between">
+                    <span className="text-[11px] text-[#6B7280] font-medium">Terminal PIN:</span>
                     <strong className="font-mono text-base text-emerald-400">1234</strong>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] text-stone-500 uppercase tracking-wider font-bold block">
+                    <label className="text-[10px] text-[#6B7280] uppercase tracking-wider font-bold block">
                       Secret URL for kitchen tablets:
                     </label>
                     <button
                       type="button"
                       onClick={() => handleCopySecretUrl("kds", "/kds", "1234")}
-                      className="w-full py-2 px-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-stone-300 text-xs font-mono font-medium border border-stone-800 flex items-center justify-between cursor-pointer transition-all"
+                      className="w-full py-2 px-3 rounded-xl bg-white hover:bg-[#F7F9FA] text-[#374151] text-xs font-mono font-medium border border-[#E5E7EB] flex items-center justify-between cursor-pointer transition-all"
                     >
                       <span className="truncate">/kds?pin=1234</span>
                       {copiedUrlKey === "kds" ? (
                         <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
                       ) : (
-                        <Copy className="h-3.5 w-3.5 text-stone-500 shrink-0" />
+                        <Copy className="h-3.5 w-3.5 text-[#6B7280] shrink-0" />
                       )}
                     </button>
                   </div>
                 </div>
 
                 {/* POS Access */}
-                <div className="bg-stone-950 p-4 rounded-2xl border border-stone-800 space-y-3">
+                <div className="bg-white p-4 rounded-2xl border border-[#E5E7EB] space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white uppercase tracking-wider">
+                    <span className="text-xs font-bold text-[#1F2937] uppercase tracking-wider">
                       💳 Cashier POS
                     </span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-stone-900 text-stone-400 border border-stone-800">
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white text-[#6B7280] border border-[#E5E7EB]">
                       POS_PIN
                     </span>
                   </div>
 
-                  <div className="bg-stone-900/90 p-2.5 rounded-xl border border-stone-800 flex items-center justify-between">
-                    <span className="text-[11px] text-stone-400 font-medium">Terminal PIN:</span>
+                  <div className="bg-white/90 p-2.5 rounded-xl border border-[#E5E7EB] flex items-center justify-between">
+                    <span className="text-[11px] text-[#6B7280] font-medium">Terminal PIN:</span>
                     <strong className="font-mono text-base text-emerald-400">1234</strong>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] text-stone-500 uppercase tracking-wider font-bold block">
+                    <label className="text-[10px] text-[#6B7280] uppercase tracking-wider font-bold block">
                       Secret URL for cashier counter:
                     </label>
                     <button
                       type="button"
                       onClick={() => handleCopySecretUrl("pos", "/pos", "1234")}
-                      className="w-full py-2 px-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-stone-300 text-xs font-mono font-medium border border-stone-800 flex items-center justify-between cursor-pointer transition-all"
+                      className="w-full py-2 px-3 rounded-xl bg-white hover:bg-[#F7F9FA] text-[#374151] text-xs font-mono font-medium border border-[#E5E7EB] flex items-center justify-between cursor-pointer transition-all"
                     >
                       <span className="truncate">/pos?pin=1234</span>
                       {copiedUrlKey === "pos" ? (
                         <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
                       ) : (
-                        <Copy className="h-3.5 w-3.5 text-stone-500 shrink-0" />
+                        <Copy className="h-3.5 w-3.5 text-[#6B7280] shrink-0" />
                       )}
                     </button>
                   </div>
                 </div>
 
                 {/* Admin Access */}
-                <div className="bg-stone-950 p-4 rounded-2xl border border-stone-800 space-y-3">
+                <div className="bg-white p-4 rounded-2xl border border-[#E5E7EB] space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white uppercase tracking-wider">
+                    <span className="text-xs font-bold text-[#1F2937] uppercase tracking-wider">
                       📊 Manager Admin
                     </span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-stone-900 text-stone-400 border border-stone-800">
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white text-[#6B7280] border border-[#E5E7EB]">
                       ADMIN_PIN
                     </span>
                   </div>
 
-                  <div className="bg-stone-900/90 p-2.5 rounded-xl border border-stone-800 flex items-center justify-between">
-                    <span className="text-[11px] text-stone-400 font-medium">Terminal PIN:</span>
+                  <div className="bg-white/90 p-2.5 rounded-xl border border-[#E5E7EB] flex items-center justify-between">
+                    <span className="text-[11px] text-[#6B7280] font-medium">Terminal PIN:</span>
                     <strong className="font-mono text-base text-purple-400">9999</strong>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] text-stone-500 uppercase tracking-wider font-bold block">
+                    <label className="text-[10px] text-[#6B7280] uppercase tracking-wider font-bold block">
                       Secret URL for manager device:
                     </label>
                     <button
                       type="button"
                       onClick={() => handleCopySecretUrl("admin", "/admin", "9999")}
-                      className="w-full py-2 px-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-stone-300 text-xs font-mono font-medium border border-stone-800 flex items-center justify-between cursor-pointer transition-all"
+                      className="w-full py-2 px-3 rounded-xl bg-white hover:bg-[#F7F9FA] text-[#374151] text-xs font-mono font-medium border border-[#E5E7EB] flex items-center justify-between cursor-pointer transition-all"
                     >
                       <span className="truncate">/admin?pin=9999</span>
                       {copiedUrlKey === "admin" ? (
                         <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
                       ) : (
-                        <Copy className="h-3.5 w-3.5 text-stone-500 shrink-0" />
+                        <Copy className="h-3.5 w-3.5 text-[#6B7280] shrink-0" />
                       )}
                     </button>
                   </div>
@@ -1045,21 +1045,21 @@ export function AdminPage() {
       {/* PRICE & DETAILS EDITOR MODAL */}
       {editingProduct && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-stone-900 border border-stone-800 rounded-3xl w-full max-w-md p-5 sm:p-6 space-y-4 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-stone-800">
+          <div className="bg-white border border-[#E5E7EB] rounded-3xl w-full max-w-md p-5 sm:p-6 space-y-4 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E5E7EB]">
               <div className="flex items-center gap-2.5">
                 <span className="p-2 rounded-xl bg-[#00A86B]/10 text-[#00A86B]">
                   <Pencil className="h-4 w-4" />
                 </span>
                 <div>
-                  <h3 className="font-black text-base text-white">Edit Menu Item</h3>
-                  <p className="text-[11px] text-stone-400 font-mono">ID: {editingProduct.id}</p>
+                  <h3 className="font-black text-base text-[#1F2937]">Edit Menu Item</h3>
+                  <p className="text-[11px] text-[#6B7280] font-mono">ID: {editingProduct.id}</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setEditingProduct(null)}
-                className="p-1.5 rounded-xl text-stone-400 hover:text-stone-200 hover:bg-stone-800 transition-all cursor-pointer"
+                className="p-1.5 rounded-xl text-[#6B7280] hover:text-[#1F2937] hover:bg-[#F7F9FA] transition-all cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -1067,17 +1067,17 @@ export function AdminPage() {
 
             <form onSubmit={handleSaveProductDetails} className="space-y-4">
               {/* Product Preview Header */}
-              <div className="flex items-center gap-3 p-3 rounded-2xl bg-stone-950 border border-stone-800">
+              <div className="flex items-center gap-3 p-3 rounded-2xl bg-white border border-[#E5E7EB]">
                 <img
                   src={editingProduct.imageUrl}
                   alt={editingProduct.name}
-                  className="h-12 w-12 rounded-xl object-cover bg-stone-900 shrink-0"
+                  className="h-12 w-12 rounded-xl object-cover bg-white shrink-0"
                 />
                 <div className="min-w-0">
-                  <span className="text-[10px] uppercase font-bold text-stone-500">
+                  <span className="text-[10px] uppercase font-bold text-[#6B7280]">
                     {editingProduct.categoryName || "Specialty"}
                   </span>
-                  <p className="text-xs font-bold text-white truncate">
+                  <p className="text-xs font-bold text-[#1F2937] truncate">
                     {editForm.name || editingProduct.name}
                   </p>
                   <p className="text-xs font-mono font-bold text-[#00A86B]">
@@ -1088,21 +1088,21 @@ export function AdminPage() {
 
               {/* Item Name */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-stone-300">Item Name</label>
+                <label className="text-xs font-bold text-[#374151]">Item Name</label>
                 <input
                   type="text"
                   required
                   value={editForm.name}
                   onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-3.5 py-2 rounded-xl bg-stone-950 border border-stone-800 text-xs text-white focus:outline-none focus:border-[#00A86B]"
+                  className="w-full px-3.5 py-2 rounded-xl bg-white border border-[#E5E7EB] text-xs text-[#1F2937] focus:outline-none focus:border-[#00A86B]"
                 />
               </div>
 
               {/* Price in PHP */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-stone-300">Price (PHP ₱)</label>
+                <label className="text-xs font-bold text-[#374151]">Price (PHP ₱)</label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 font-mono text-xs">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280] font-mono text-xs">
                     ₱
                   </span>
                   <input
@@ -1112,26 +1112,26 @@ export function AdminPage() {
                     required
                     value={editForm.price}
                     onChange={(e) => setEditForm((prev) => ({ ...prev, price: e.target.value }))}
-                    className="w-full pl-7 pr-3.5 py-2 rounded-xl bg-stone-950 border border-stone-800 text-xs font-mono text-white focus:outline-none focus:border-[#00A86B]"
+                    className="w-full pl-7 pr-3.5 py-2 rounded-xl bg-white border border-[#E5E7EB] text-xs font-mono text-[#1F2937] focus:outline-none focus:border-[#00A86B]"
                   />
                 </div>
-                <p className="text-[10px] text-stone-500">
+                <p className="text-[10px] text-[#6B7280]">
                   Updated price immediately applies to customer checkout and cashier POS tickets.
                 </p>
               </div>
 
               {/* Popular / Featured Badge */}
-              <div className="flex items-center justify-between p-3 rounded-xl bg-stone-950 border border-stone-800">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-[#E5E7EB]">
                 <div className="flex items-center gap-2">
                   <Flame
                     className={cn(
                       "h-4 w-4",
-                      editForm.popular ? "text-amber-400 fill-amber-400" : "text-stone-500"
+                      editForm.popular ? "text-amber-400 fill-amber-400" : "text-[#6B7280]"
                     )}
                   />
                   <div>
-                    <p className="text-xs font-bold text-stone-200">Featured / Popular Badge</p>
-                    <p className="text-[10px] text-stone-500">Highlight in customer carousel</p>
+                    <p className="text-xs font-bold text-[#1F2937]">Featured / Popular Badge</p>
+                    <p className="text-[10px] text-[#6B7280]">Highlight in customer carousel</p>
                   </div>
                 </div>
                 <input
@@ -1144,7 +1144,7 @@ export function AdminPage() {
 
               {/* Description */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-stone-300">Item Description</label>
+                <label className="text-xs font-bold text-[#374151]">Item Description</label>
                 <textarea
                   rows={3}
                   value={editForm.description}
@@ -1152,7 +1152,7 @@ export function AdminPage() {
                     setEditForm((prev) => ({ ...prev, description: e.target.value }))
                   }
                   placeholder="Ingredients, tasting notes, roast profile..."
-                  className="w-full px-3.5 py-2 rounded-xl bg-stone-950 border border-stone-800 text-xs text-white focus:outline-none focus:border-[#00A86B] resize-none"
+                  className="w-full px-3.5 py-2 rounded-xl bg-white border border-[#E5E7EB] text-xs text-[#1F2937] focus:outline-none focus:border-[#00A86B] resize-none"
                 />
               </div>
 
@@ -1161,7 +1161,7 @@ export function AdminPage() {
                 <button
                   type="button"
                   onClick={() => setEditingProduct(null)}
-                  className="px-4 py-2 rounded-xl bg-stone-950 hover:bg-stone-800 text-stone-400 text-xs font-bold border border-stone-800 cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-white hover:bg-[#F7F9FA] text-[#6B7280] text-xs font-bold border border-[#E5E7EB] cursor-pointer"
                 >
                   Cancel
                 </button>
