@@ -13,16 +13,16 @@ import { CartProvider, useCart } from "./context/CartContext";
 import { cn } from "./lib/utils";
 
 // Standalone Full Pages
-import { KdsPage } from "./pages/KdsPage";
-import { PosPage } from "./pages/PosPage";
-import { AdminPage } from "./pages/AdminPage";
-import { AdminProductNewPage } from "./pages/AdminProductNewPage";
-import { AdminProductEditPage } from "./pages/AdminProductEditPage";
-import { ItemCustomizationPage } from "./pages/ItemCustomizationPage";
-import { CartPage } from "./pages/CartPage";
-import { EditCartItemPage } from "./pages/EditCartItemPage";
-import { CheckoutPage } from "./pages/CheckoutPage";
-import { OrderReceiptPage } from "./pages/OrderReceiptPage";
+import { KdsPage } from "./legacy-pages/KdsPage";
+import { PosPage } from "./legacy-pages/PosPage";
+import { AdminPage } from "./legacy-pages/AdminPage";
+import { AdminProductNewPage } from "./legacy-pages/AdminProductNewPage";
+import { AdminProductEditPage } from "./legacy-pages/AdminProductEditPage";
+import { ItemCustomizationPage } from "./legacy-pages/ItemCustomizationPage";
+import { CartPage } from "./legacy-pages/CartPage";
+import { EditCartItemPage } from "./legacy-pages/EditCartItemPage";
+import { CheckoutPage } from "./legacy-pages/CheckoutPage";
+import { OrderReceiptPage } from "./legacy-pages/OrderReceiptPage";
 
 export default function App() {
   return (
