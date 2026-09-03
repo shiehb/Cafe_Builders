@@ -668,8 +668,23 @@ app.post("/api/checkout", async (req, res) => {
     });
   }
 });
-
 // 5. Get all orders (for staff / KDS dashboard)
+// Canonical order contract. It delegates to the established checkout pipeline so
+// availability, pricing, payment, persistence, and KDS broadcasting stay identical.
+app.post("/api/orders", async (req, res) => {
+  try {
+    const upstream = await fetch(`http://127.0.0.1:${PORT}/api/checkout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body),
+    });
+    const payload = await upstream.json();
+    return res.status(upstream.status).json(payload);
+  } catch (error) {
+    return res.status(502).json({ success: false, code: "ORDER_SERVICE_UNAVAILABLE", message: "Order service is unavailable." });
+  }
+});
+
 app.get("/api/orders", (_req, res) => {
   const list = Array.from(ordersStore.values()).sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
