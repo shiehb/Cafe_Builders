@@ -34,6 +34,8 @@ const FOOD_ADDONS = [
   { label: "Crushed Roasted Pistachios", price: 30 },
   { label: "Warm Chocolate Dip", price: 35 },
 ];
+const DEFAULT_MILK_OPTIONS = MILK_OPTIONS;
+const DEFAULT_BEVERAGE_ADDONS = BEVERAGE_ADDONS;
 
 export const isFoodCategory = (prod: Product | null | undefined): boolean => {
   if (!prod) return false;
@@ -161,6 +163,15 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
 
   const isSoldOut = product.isAvailable === false;
   const isFood = isFoodCategory(product);
+  const configuredGroups = product.enabledCustomizationGroups;
+  const hasGroup = (group: "ice" | "sugar" | "milk" | "addons") =>
+    configuredGroups
+      ? configuredGroups.includes(group)
+      : isFood
+        ? group === "addons"
+        : group !== "ice" || product.temperatureOptions?.includes("Iced") !== false;
+  const milkOptions = product.milkOptions?.length ? product.milkOptions : DEFAULT_MILK_OPTIONS;
+  const beverageAddons = product.addonOptions?.length ? product.addonOptions : DEFAULT_BEVERAGE_ADDONS;
 
   const toggleAddon = (addon: { label: string; price: number }) => {
     if (selectedAddons.some((a) => a.label === addon.label)) {
@@ -171,8 +182,8 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
   };
 
   const extraPricePerItem =
-    (!isFood && product.milkOptionsAvailable ? selectedMilk.price : 0) +
-    selectedAddons.reduce((sum, a) => sum + a.price, 0);
+    (!isFood && hasGroup("milk") ? selectedMilk.price : 0) +
+    (hasGroup("addons") ? selectedAddons.reduce((sum, a) => sum + a.price, 0) : 0);
 
   const unitPrice = product.price + extraPricePerItem;
   const lineTotal = unitPrice * quantity;
@@ -183,15 +194,14 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
     const customizations: ItemCustomization = isFood
       ? {
           temperature: foodWarming,
-          addOns: selectedAddons.map((a) => `${a.label} (+${formatPrice(a.price)})`),
+          addOns: hasGroup("addons") ? selectedAddons.map((a) => `${a.label} (+${formatPrice(a.price)})`) : [],
           specialInstructions: specialInstructions.trim() || undefined,
         }
       : {
-          temperature: product.temperatureOptions && product.temperatureOptions.length > 1 ? temperature : undefined,
-          iceLevel: temperature === "Iced" ? iceLevel : undefined,
-          sweetness: sweetness ? `${sweetness} Sugar` : undefined,
-          milkOption: product.milkOptionsAvailable ? selectedMilk.label : undefined,
-          addOns: selectedAddons.map((a) => `${a.label} (+${formatPrice(a.price)})`),
+          iceLevel: hasGroup("ice") ? iceLevel : undefined,
+          sweetness: hasGroup("sugar") ? `${sweetness} Sugar` : undefined,
+          milkOption: hasGroup("milk") ? selectedMilk.label : undefined,
+          addOns: hasGroup("addons") ? selectedAddons.map((a) => `${a.label} (+${formatPrice(a.price)})`) : [],
           specialInstructions: specialInstructions.trim() || undefined,
         };
 
@@ -387,8 +397,8 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
           ) : (
             /* ===== BEVERAGE OPTIONS ===== */
             <div className="space-y-5">
-              {/* Temperature Toggle (if both Hot & Iced supported) */}
-              {product.temperatureOptions && product.temperatureOptions.length > 1 && (
+              {/* Temperature is intentionally not customer-configurable. */}
+              {false && product.temperatureOptions && product.temperatureOptions.length > 1 && (
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
                     <h2 className="text-[15px] font-bold text-[#1F2937]">Temperature</h2>
@@ -418,7 +428,7 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
               )}
 
               {/* Sugar Level */}
-              <div className="space-y-2.5">
+              {hasGroup("sugar") && <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
                   <h2 className="text-[15px] font-bold text-[#1F2937]">Sugar Level</h2>
                   <span className="text-[11px] text-[#6B7280]">Select 1</span>
@@ -442,10 +452,10 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
                     );
                   })}
                 </div>
-              </div>
+              </div>}
 
-              {/* Ice Level (only when Iced) */}
-              {temperature === "Iced" && (
+              {/* Ice Level */}
+              {hasGroup("ice") && (
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
                     <h2 className="text-[15px] font-bold text-[#1F2937]">Ice Level</h2>
@@ -474,14 +484,14 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
               )}
 
               {/* Dairy / Plant Milk (if available) */}
-              {product.milkOptionsAvailable && (
+              {hasGroup("milk") && (
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
                     <h2 className="text-[15px] font-bold text-[#1F2937]">Dairy / Plant Milk</h2>
                     <span className="text-[11px] text-[#6B7280]">Optional</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    {MILK_OPTIONS.map((milk) => {
+                    {milkOptions.map((milk) => {
                       const isSelected = selectedMilk.label === milk.label;
                       return (
                         <button
@@ -506,13 +516,13 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
               )}
 
               {/* Beverage Add-ons */}
-              <div className="space-y-2.5">
+              {hasGroup("addons") && <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
                   <h2 className="text-[15px] font-bold text-[#1F2937]">Add-ons & Toppings</h2>
                   <span className="text-[11px] text-[#6B7280]">Optional</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {BEVERAGE_ADDONS.map((addon) => {
+                  {beverageAddons.map((addon) => {
                     const isChecked = selectedAddons.some((a) => a.label === addon.label);
                     return (
                       <button
@@ -542,7 +552,7 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
                     );
                   })}
                 </div>
-              </div>
+              </div>}
 
               {/* Special Instructions */}
               <div className="space-y-2">

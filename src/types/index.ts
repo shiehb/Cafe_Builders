@@ -14,6 +14,8 @@ export interface CustomizationOption {
   price: number;
 }
 
+export type CustomizationGroup = "ice" | "sugar" | "milk" | "addons";
+
 export interface ItemCustomization {
   size?: string;
   iceLevel?: "Regular Ice" | "Less Ice" | "No Ice" | "Extra Ice" | "Normal Ice" | string;
@@ -44,6 +46,10 @@ export interface Product {
   temperatureOptions?: ("Hot" | "Iced")[];
   sweetnessAdjustable?: boolean;
   milkOptionsAvailable?: boolean;
+  /** Explicit manager configuration; absent means legacy product defaults. */
+  enabledCustomizationGroups?: CustomizationGroup[];
+  milkOptions?: CustomizationOption[];
+  addonOptions?: CustomizationOption[];
   tags?: string[];
 }
 

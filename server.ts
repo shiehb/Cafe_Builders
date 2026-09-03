@@ -321,6 +321,9 @@ app.post("/api/admin/products", async (req, res) => {
       isAvailable = true,
       temperatureOptions = ["Hot", "Iced"],
       sweetnessAdjustable = true,
+      enabledCustomizationGroups,
+      milkOptions,
+      addonOptions,
       tags = [],
     } = req.body || {};
 
@@ -348,6 +351,9 @@ app.post("/api/admin/products", async (req, res) => {
       isAvailable: isAvailable !== false,
       temperatureOptions: Array.isArray(temperatureOptions) && temperatureOptions.length > 0 ? temperatureOptions : ["Hot", "Iced"],
       sweetnessAdjustable: sweetnessAdjustable !== false,
+      enabledCustomizationGroups: Array.isArray(enabledCustomizationGroups) ? enabledCustomizationGroups : undefined,
+      milkOptions: Array.isArray(milkOptions) ? milkOptions : undefined,
+      addonOptions: Array.isArray(addonOptions) ? addonOptions : undefined,
       tags: Array.isArray(tags) ? tags : ["Handcrafted", "Featured"],
     };
 
@@ -453,6 +459,13 @@ app.patch("/api/admin/products/:id", async (req, res) => {
   if (typeof updates.name === "string" && updates.name.trim()) {
     product.name = updates.name.trim();
   }
+  if (Array.isArray(updates.enabledCustomizationGroups)) {
+    product.enabledCustomizationGroups = updates.enabledCustomizationGroups.filter(
+      (group: unknown) => ["ice", "sugar", "milk", "addons"].includes(String(group))
+    );
+  }
+  if (Array.isArray(updates.milkOptions)) product.milkOptions = updates.milkOptions;
+  if (Array.isArray(updates.addonOptions)) product.addonOptions = updates.addonOptions;
 
   productsStore.set(id, product);
 
@@ -495,6 +508,22 @@ app.post("/api/checkout", async (req, res) => {
 
     if (!items || items.length === 0) {
       return res.status(400).json({ error: "Cart is empty. Please add items before checking out." });
+    }
+
+    // Cart data is a client-side snapshot. Re-check the canonical catalog immediately
+    // before payment so an item sold out after it was added can never be submitted.
+    const unavailable = items
+      .map((item) => ({ item, product: productsStore.get(item.productId) }))
+      .filter(({ product }) => !product || product.isAvailable === false);
+    if (unavailable.length > 0) {
+      return res.status(409).json({
+        error: `Unavailable item: ${unavailable[0].item.productName || "This product"}. Please remove it or choose a replacement.`,
+        unavailableProductIds: unavailable.map(({ item }) => item.productId),
+      });
+    }
+    const invalidQuantity = items.find((item) => !Number.isInteger(item.quantity) || item.quantity < 1);
+    if (invalidQuantity) {
+      return res.status(400).json({ error: "Each cart item must have a valid quantity." });
     }
 
     const subtotal = items.reduce((sum, it) => sum + (it.subtotal || it.unitPrice * it.quantity), 0);
