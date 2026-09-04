@@ -63,7 +63,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   value={searchQuery}
                   onChange={(e) => onSearchChange?.(e.target.value)}
                   placeholder="Search coffee, pastries, pasta..."
-                  className="w-full bg-[#F7F9FA] border border-[#E5E7EB] rounded-full pl-9 pr-8 py-2 text-[12px] leading-[18px] text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#00A86B] focus:border-transparent transition-all"
+                  className="w-full bg-[#F7F9FA] border border-[#E5E7EB] rounded-full pl-9 pr-8 py-2 text-[16px] leading-[18px] text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#00A86B] focus:border-transparent transition-all"
                 />
                 {searchQuery && (
                   <button
