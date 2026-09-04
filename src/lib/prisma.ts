@@ -5,32 +5,66 @@ const noOp = {
   findMany: async () => [],
   findFirst: async () => null,
   findUnique: async () => null,
+  findFirstOrThrow: async () => null,
+  findUniqueOrThrow: async () => null,
   create: async (d: any) => d?.data ?? {},
   update: async (d: any) => d?.data ?? {},
   delete: async () => ({}),
+  deleteMany: async () => ({ count: 0 }),
+  updateMany: async () => ({ count: 0 }),
   count: async () => 0,
   upsert: async (d: any) => d?.create ?? {},
+  groupBy: async () => [],
+  aggregate: async () => ({}),
 };
+
+function createMockPrisma(): any {
+  return new Proxy(
+    {},
+    {
+      get: (_target, prop) => {
+        if (prop === "$transaction") {
+          return async (arg: any) => {
+            if (Array.isArray(arg)) return Promise.all(arg);
+            if (typeof arg === "function") return arg(createMockPrisma());
+            return [];
+          };
+        }
+        if (prop === "$connect" || prop === "$disconnect") {
+          return async () => {};
+        }
+        if (prop === "$queryRaw" || prop === "$executeRaw") {
+          return async () => [];
+        }
+        return noOp;
+      },
+    }
+  );
+}
 
 let prisma: any;
 let isRealPrisma = false;
 try {
+  let dbUrl = process.env.DATABASE_URL;
   if (
-    process.env.DATABASE_URL &&
-    (process.env.DATABASE_URL.startsWith("postgresql://") ||
-      process.env.DATABASE_URL.startsWith("postgres://"))
+    dbUrl &&
+    (dbUrl.startsWith("postgresql://") || dbUrl.startsWith("postgres://"))
   ) {
+    if (dbUrl.includes(":6543") && !dbUrl.includes("pgbouncer=true")) {
+      dbUrl += (dbUrl.includes("?") ? "&" : "?") + "pgbouncer=true";
+    }
     prisma = new PrismaClient({
+      datasources: { db: { url: dbUrl } },
       log: ["warn", "error"],
     });
     isRealPrisma = true;
   } else {
     console.warn("[AI Studio] Database not connected — using mock");
-    prisma = new Proxy({}, { get: () => noOp });
+    prisma = createMockPrisma();
   }
 } catch {
   console.warn("[AI Studio] Database not connected — using mock");
-  prisma = new Proxy({}, { get: () => noOp });
+  prisma = createMockPrisma();
 }
 
 export { prisma };
@@ -44,7 +78,18 @@ export function getPrismaClient(): PrismaClient | null {
   if (!isRealPrisma || !process.env.DATABASE_URL) {
     return null;
   }
-  return prisma;
+  return prisma as PrismaClient;
+}
+
+/**
+ * Returns the active PrismaClient or throws a descriptive error.
+ */
+export function getDb(): PrismaClient {
+  const client = getPrismaClient();
+  if (!client) {
+    throw new Error("Prisma client is not initialized or DATABASE_URL is not configured.");
+  }
+  return client;
 }
 
 /**

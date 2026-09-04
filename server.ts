@@ -4,10 +4,9 @@ import cookieParser from "cookie-parser";
 import next from "next";
 import dotenv from "dotenv";
 import { createPayMongoQRPhPayment } from "./src/lib/paymongo";
-import { Category, CustomizationGroupConfig, CustomizationOptionConfig, Order, OrderStatus, CheckoutPayload, Product, Ingredient } from "./src/types";
-import { CATEGORIES, PRODUCTS } from "./src/data/menuData";
-import { broadcastKitchenOrder, broadcastProductUpdate, getSupabaseClient, getSupabaseAdminClient } from "./src/lib/supabase";
-import { getPrismaClient, seedDatabaseIfEmpty } from "./src/lib/prisma";
+import { Order, OrderStatus, CheckoutPayload, Product } from "./src/types";
+import { broadcastKitchenOrder, broadcastProductUpdate } from "./src/lib/supabase";
+import { getDb } from "./src/lib/prisma";
 import {
   ADMIN_COOKIE_NAME,
   verifyAdminPin,
@@ -15,17 +14,18 @@ import {
   isRequestAuthorized,
 } from "./src/lib/auth";
 import { expressAdminAuthMiddleware } from "./src/serverMiddleware";
+import {
+  catalogService,
+  inventoryService,
+  orderService,
+  adminService,
+} from "./src/services";
 
 dotenv.config();
 
 const app = express();
 const PORT = 3000;
 export { app };
-
-// Initialize & seed database if empty
-seedDatabaseIfEmpty().catch((err) => {
-  console.warn("Prisma startup seeding skipped:", (err as Error)?.message || err);
-});
 
 // Parse cookies for secure HttpOnly admin_session validation
 app.use(cookieParser());
@@ -39,64 +39,43 @@ app.use(
   })
 );
 
-const ingredientsStore: Map<string, Ingredient> = new Map([
-  ["ingredient_matcha", { id: "ingredient_matcha", name: "Matcha", isAvailable: true, productIds: PRODUCTS.filter((p) => p.categoryId === "cat_matcha").map((p) => p.id) }],
-  ["ingredient_milk", { id: "ingredient_milk", name: "Whole Milk", isAvailable: true, productIds: PRODUCTS.filter((p) => p.milkOptionsAvailable).map((p) => p.id) }],
-  ["ingredient_oat_milk", { id: "ingredient_oat_milk", name: "Oat Milk", isAvailable: true, productIds: ["prod_emerald_mint", "prod_oat_flat_white"] }],
-  ["ingredient_almond_milk", { id: "ingredient_almond_milk", name: "Almond Milk", isAvailable: true, productIds: [] }],
-  ["ingredient_soy_milk", { id: "ingredient_soy_milk", name: "Soy Milk", isAvailable: true, productIds: [] }],
-  ["ingredient_coffee_beans", { id: "ingredient_coffee_beans", name: "Coffee Beans", isAvailable: true, productIds: PRODUCTS.filter((p) => p.categoryId === "cat_coffee").map((p) => p.id) }],
-]);
-const categoriesStore = new Map<string, Category>(CATEGORIES.map((category) => [category.id, { ...category, isActive: true }]));
-const customizationGroupsStore = new Map<string, CustomizationGroupConfig>([
-  ["group_ice", { id: "group_ice", name: "Ice Level", selectionMode: "SINGLE", isActive: true }],
-  ["group_sugar", { id: "group_sugar", name: "Sugar Level", selectionMode: "SINGLE", isActive: true }],
-  ["group_milk", { id: "group_milk", name: "Milk Choices", selectionMode: "SINGLE", isActive: true }],
-  ["group_addons", { id: "group_addons", name: "Add-ons", selectionMode: "MULTIPLE", isActive: true }],
-]);
-const customizationOptionsStore = new Map<string, CustomizationOptionConfig>([
-  ["option_ice_less", { id: "option_ice_less", groupId: "group_ice", name: "Less", priceModifier: 0, isActive: true }],
-  ["option_ice_regular", { id: "option_ice_regular", groupId: "group_ice", name: "Regular", priceModifier: 0, isActive: true }],
-  ["option_ice_extra", { id: "option_ice_extra", groupId: "group_ice", name: "Extra", priceModifier: 0, isActive: true }],
-  ["option_sugar_less", { id: "option_sugar_less", groupId: "group_sugar", name: "Less Sweet", priceModifier: 0, isActive: true }],
-  ["option_sugar_regular", { id: "option_sugar_regular", groupId: "group_sugar", name: "Regular", priceModifier: 0, isActive: true }],
-  ["option_sugar_more", { id: "option_sugar_more", groupId: "group_sugar", name: "More Sweet", priceModifier: 0, isActive: true }],
-  ["option_milk_whole", { id: "option_milk_whole", groupId: "group_milk", name: "Whole Milk", priceModifier: 0, isActive: true }],
-  ["option_milk_oat", { id: "option_milk_oat", groupId: "group_milk", name: "Oat Milk", priceModifier: 25, isActive: true }],
-  ["option_milk_almond", { id: "option_milk_almond", groupId: "group_milk", name: "Almond Milk", priceModifier: 25, isActive: true }],
-  ["option_milk_soy", { id: "option_milk_soy", groupId: "group_milk", name: "Soy Milk", priceModifier: 20, isActive: true }],
-  ["option_addon_shot", { id: "option_addon_shot", groupId: "group_addons", name: "Extra Shot", priceModifier: 30, isActive: true }],
-  ["option_addon_jelly", { id: "option_addon_jelly", groupId: "group_addons", name: "Coffee Jelly", priceModifier: 25, isActive: true }],
-  ["option_addon_vanilla", { id: "option_addon_vanilla", groupId: "group_addons", name: "Vanilla Syrup", priceModifier: 20, isActive: true }],
-]);
-
-function recomputeProductAvailability(product: Product): Product {
-  const linked = (product.ingredientIds || []).map((id) => ingredientsStore.get(id));
-  const ingredientUnavailable = linked.find((ingredient) => ingredient && !ingredient.isAvailable);
-  product.isAvailable = product.manualAvailability !== false && !ingredientUnavailable;
-  return product;
+// Format product for client backward-compatibility
+function formatProductForClient(product: any) {
+  if (!product) return null;
+  const priceNum = typeof product.price === "number" ? product.price : Number(product.price) || 0;
+  return {
+    ...product,
+    price: priceNum,
+    basePrice: priceNum,
+    categoryName: product.category?.name || product.categoryId,
+    categoryIds: [product.categoryId],
+    ingredientIds: Array.isArray(product.ingredients)
+      ? product.ingredients.map((i: any) => i.ingredientId)
+      : (product.ingredientIds || []),
+    enabledCustomizationGroups: Array.isArray(product.customizationGroups)
+      ? product.customizationGroups.map((cg: any) => {
+          const n = (cg.group?.name || "").toLowerCase();
+          return n.includes("ice") ? "ice" : n.includes("sugar") ? "sugar" : n.includes("milk") ? "milk" : "addons";
+        })
+      : (product.enabledCustomizationGroups || []),
+    milkOptions: Array.isArray(product.allowedOptions)
+      ? product.allowedOptions
+          .filter((ao: any) => ao.option?.group?.name?.toLowerCase().includes("milk"))
+          .map((ao: any) => ({ name: ao.option.name, price: Number(ao.option.priceModifier) || 0 }))
+      : (product.milkOptions || []),
+    addonOptions: Array.isArray(product.allowedOptions)
+      ? product.allowedOptions
+          .filter((ao: any) => !ao.option?.group?.name?.toLowerCase().includes("milk"))
+          .map((ao: any) => ({ name: ao.option.name, price: Number(ao.option.priceModifier) || 0 }))
+      : (product.addonOptions || []),
+    allowedOptionIds: Array.isArray(product.allowedOptions)
+      ? product.allowedOptions.map((ao: any) => ao.optionId)
+      : (product.allowedOptionIds || []),
+  };
 }
 
-function recomputeAllProductAvailability() {
-  for (const product of productsStore.values()) recomputeProductAvailability(product);
-}
-
-// In-memory database stores with persistence during server lifecycle
-let orderSequence = 1;
-const ordersStore: Map<string, Order> = new Map();
+// In-memory idempotency store for orders
 const orderIdempotencyStore: Map<string, string> = new Map();
-
-// In-memory products store initialized from static catalog
-const productsStore: Map<string, Product> = new Map(
-  PRODUCTS.map((p) => [p.id, {
-    ...p,
-    ingredientIds: p.ingredientIds || [
-      ...(p.categoryId === "cat_matcha" ? ["ingredient_matcha"] : []),
-      ...(p.categoryId === "cat_coffee" ? ["ingredient_coffee_beans"] : []),
-      ...(p.milkOptionsAvailable ? ["ingredient_milk", "ingredient_oat_milk"] : []),
-    ],
-  }])
-);
 
 // SSE Connected clients for instant low-latency real-time updates
 const sseClients: Set<Response> = new Set();
@@ -157,22 +136,29 @@ function broadcastProductRealtime(type: "product_updated", product: Product) {
   }
 }
 
-// Helper to format order number
-function getNextOrderNumber(): string {
-  const num = String(orderSequence++).padStart(3, "0");
-  return `C-${num}`;
-}
-
 // 1. Health check
-app.get("/api/health", (_req, res) => {
-  res.json({
-    status: "ok",
-    app: "Cafe Web Ordering App (Admin & Inventory Security System)",
-    time: new Date().toISOString(),
-    ordersCount: ordersStore.size,
-    productsCount: productsStore.size,
-    connectedClients: sseClients.size,
-  });
+app.get("/api/health", async (_req, res) => {
+  try {
+    const db = getDb();
+    const [ordersCount, productsCount] = await Promise.all([
+      db.order.count().catch(() => 0),
+      db.product.count().catch(() => 0),
+    ]);
+    res.json({
+      status: "ok",
+      app: "Cafe Web Ordering App (Admin & Inventory Security System)",
+      time: new Date().toISOString(),
+      ordersCount,
+      productsCount,
+      connectedClients: sseClients.size,
+    });
+  } catch {
+    res.json({
+      status: "ok",
+      time: new Date().toISOString(),
+      connectedClients: sseClients.size,
+    });
+  }
 });
 
 // 2. Real-time Server-Sent Events stream for Kitchen Display & Live Customer Tracking
@@ -259,92 +245,97 @@ app.post("/api/auth/logout", (_req, res) => {
 });
 
 // ==============================================================================
-// PUBLIC MENU & PRODUCT ENDPOINTS (RLS COMPLIANT)
+// PUBLIC MENU & PRODUCT ENDPOINTS (AUTHORITATIVE PRISMA SERVICES)
 // ==============================================================================
 
 // Categories API
-app.get("/api/categories", (_req, res) => {
-  res.json({ data: Array.from(categoriesStore.values()).filter((category) => category.isActive && !category.isArchived) });
+app.get("/api/categories", async (_req, res) => {
+  try {
+    const categories = await adminService.listCategories();
+    res.json({
+      data: categories.map((c) => ({
+        ...c,
+        iconName: c.icon || undefined,
+        isActive: true,
+      })),
+    });
+  } catch (error: any) {
+    console.error("Failed to list categories:", error);
+    res.status(500).json({ error: error?.message || "Failed to list categories" });
+  }
 });
 
 /**
  * Public Customer Products API
- * In compliance with RLS constraints:
- * Reads from public store or Supabase public anon client.
- * Returns products with current isAvailable status. If availableOnly query is set,
- * returns only `isAvailable === true` items.
+ * Returns products with current isAvailable status calculated by catalogService.
  */
 app.get("/api/products", async (req, res) => {
-  const categoryId = req.query.category as string;
-  const availableOnly = req.query.availableOnly === "true";
+  try {
+    const categoryId = req.query.category as string;
+    const availableOnly = req.query.availableOnly === "true";
 
-  // Check Supabase public anon client if available
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
-      let query = supabase.from("products").select("*");
-      // Public customer RLS policy: only is_available = true
-      if (availableOnly) {
-        query = query.eq("is_available", true);
-      }
-      if (categoryId && categoryId !== "all") {
-        query = query.eq("category_id", categoryId);
-      }
-      const { data, error } = await query;
-      if (!error && data && data.length > 0) {
-        return res.json({ data });
-      }
-    } catch (err) {
-      console.warn("Supabase public products read error, falling back to local store:", err);
-    }
+    const products = await catalogService.listProducts({
+      categoryId: categoryId && categoryId !== "all" ? categoryId : undefined,
+      isAvailable: availableOnly ? true : undefined,
+    });
+
+    res.json({ data: products.map(formatProductForClient) });
+  } catch (error: any) {
+    console.error("Failed to list products:", error);
+    res.status(500).json({ error: error?.message || "Failed to list products" });
   }
-
-  recomputeAllProductAvailability();
-  let list = Array.from(productsStore.values()).filter((p) => !p.isArchived);
-
-  if (availableOnly) {
-    list = list.filter((p) => p.isAvailable === true);
-  }
-
-  if (categoryId && categoryId !== "all") {
-    list = list.filter((p) => p.categoryId === categoryId || p.categoryName === categoryId);
-  }
-
-  res.json({ data: list });
 });
 
 // Single Product Public Endpoint
-app.get("/api/products/:id", (req, res) => {
-  const { id } = req.params;
-  const product = productsStore.get(id);
-  if (!product) {
-    return res.status(404).json({ error: "Product not found" });
+app.get("/api/products/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const product = await catalogService.getProductById(id);
+    if (!product) {
+      return res.status(404).json({ error: "Product not found" });
+    }
+    res.json({ product: formatProductForClient(product) });
+  } catch (error: any) {
+    console.error("Failed to get product:", error);
+    res.status(500).json({ error: error?.message || "Failed to get product" });
   }
-  res.json({ product: recomputeProductAvailability(product) });
 });
 
-// Canonical catalog contract consumed by Customer and POS. The current in-memory
-// catalog is normalized here so both clients receive the same availability shape.
-app.get("/api/catalog", (req, res) => {
-    recomputeAllProductAvailability();
-  const availableOnly = req.query.availableOnly === "true";
-  const data = Array.from(productsStore.values())
-    .filter((product) => !product.isArchived && (!availableOnly || product.isAvailable))
-    .map((product) => ({
-      ...product,
-      basePrice: product.price,
-      productType: product.categoryName?.toLowerCase().includes("food") || product.categoryName?.toLowerCase().includes("pastr") ? "FOOD" : "BEVERAGE",
-      categories: [{ id: product.categoryId, name: product.categoryName || product.categoryId }],
-      customizationGroups: (product.enabledCustomizationGroups || []).map((group) => ({
-        id: `group_${group}`,
-        name: group === "ice" ? "Ice Level" : group === "sugar" ? "Sugar Level" : group === "milk" ? "Milk Choices" : "Add-ons",
-        selectionMode: group === "addons" ? "MULTIPLE" : "SINGLE",
-        required: group !== "addons",
-        options: group === "milk" ? product.milkOptions || [] : group === "addons" ? product.addonOptions || [] : [],
-      })),
-      availabilityReason: product.isAvailable ? null : "MANUAL_UNAVAILABLE",
-    }));
-  res.json({ data });
+// Canonical catalog contract consumed by Customer and POS.
+app.get("/api/catalog", async (req, res) => {
+  try {
+    const availableOnly = req.query.availableOnly === "true";
+    const products = await catalogService.listProducts({
+      isAvailable: availableOnly ? true : undefined,
+    });
+
+    const data = products.map((product) => {
+      const formatted = formatProductForClient(product);
+      return {
+        ...formatted,
+        basePrice: product.price,
+        productType: product.category?.name?.toLowerCase().includes("food") || product.category?.name?.toLowerCase().includes("pastr") ? "FOOD" : "BEVERAGE",
+        categories: [{ id: product.categoryId, name: product.category?.name || product.categoryId }],
+        customizationGroups: (product.customizationGroups || []).map((cg) => ({
+          id: cg.groupId,
+          name: cg.group?.name || cg.groupId,
+          selectionMode: cg.group?.selectionMode || "SINGLE",
+          required: cg.group?.isRequired || false,
+          options: (cg.group?.options || []).map((o) => ({
+            id: o.id,
+            name: o.name,
+            price: o.priceModifier,
+          })),
+        })),
+        availabilityReason: product.isAvailable ? null : "MANUAL_UNAVAILABLE",
+      };
+    });
+
+    res.json({ data });
+  } catch (error: any) {
+    console.error("Failed to get catalog:", error);
+    res.status(500).json({ error: error?.message || "Failed to get catalog" });
+  }
 });
 
 // ==============================================================================
@@ -360,148 +351,238 @@ app.use(expressAdminAuthMiddleware);
  */
 app.get("/api/admin/products", async (_req, res) => {
   try {
-    // If Supabase Admin client exists, query directly using service_role
-    const supabaseAdmin = getSupabaseAdminClient();
-    if (supabaseAdmin) {
-      const { data, error } = await supabaseAdmin
-        .from("products")
-        .select("*")
-        .order("name", { ascending: true });
-      if (!error && data && data.length > 0) {
-        return res.json({ data });
+    const products = await catalogService.listProducts({ includeArchived: true });
+    res.json({ data: products.map(formatProductForClient) });
+  } catch (error: any) {
+    console.error("Failed to list admin products:", error);
+    res.status(500).json({ error: error?.message || "Failed to list admin products" });
+  }
+});
+
+app.get("/api/admin/ingredients", async (_req, res) => {
+  try {
+    const data = await inventoryService.listIngredients({ includeArchived: true });
+    res.json({ data });
+  } catch (error: any) {
+    console.error("Failed to list admin ingredients:", error);
+    res.status(500).json({ error: error?.message || "Failed to list ingredients" });
+  }
+});
+
+app.get("/api/admin/categories", async (_req, res) => {
+  try {
+    const data = await adminService.listCategories();
+    res.json({ data });
+  } catch (error: any) {
+    console.error("Failed to list admin categories:", error);
+    res.status(500).json({ error: error?.message || "Failed to list categories" });
+  }
+});
+
+app.post("/api/admin/categories", async (req, res) => {
+  try {
+    const name = String(req.body?.name || "").trim();
+    if (!name) return res.status(400).json({ error: "Category name is required" });
+    const category = await adminService.createCategory({
+      name,
+      sortOrder: Number.isFinite(Number(req.body?.sortOrder)) ? Number(req.body.sortOrder) : undefined,
+      icon: req.body?.icon,
+    });
+    return res.status(201).json({ success: true, category, data: category });
+  } catch (error: any) {
+    console.error("Failed to create category:", error);
+    return res.status(500).json({ error: error?.message || "Failed to create category" });
+  }
+});
+
+app.patch("/api/admin/categories/:id", async (req, res) => {
+  try {
+    const category = await adminService.updateCategory(req.params.id, {
+      name: typeof req.body?.name === "string" && req.body.name.trim() ? req.body.name.trim() : undefined,
+      sortOrder: Number.isFinite(Number(req.body?.sortOrder)) ? Number(req.body.sortOrder) : undefined,
+      icon: req.body?.icon,
+    });
+    return res.json({ success: true, category, data: category });
+  } catch (error: any) {
+    console.error("Failed to update category:", error);
+    return res.status(500).json({ error: error?.message || "Failed to update category" });
+  }
+});
+
+app.delete("/api/admin/categories/:id", async (req, res) => {
+  try {
+    const category = await adminService.deleteCategory(req.params.id);
+    return res.json({ success: true, category, data: category });
+  } catch (error: any) {
+    console.error("Failed to delete category:", error);
+    return res.status(500).json({ error: error?.message || "Failed to delete category" });
+  }
+});
+
+app.get("/api/admin/customization-groups", async (_req, res) => {
+  try {
+    const data = await adminService.listCustomizationGroups();
+    res.json({ data });
+  } catch (error: any) {
+    console.error("Failed to list customization groups:", error);
+    res.status(500).json({ error: error?.message || "Failed to list customization groups" });
+  }
+});
+
+app.post("/api/admin/customization-groups", async (req, res) => {
+  try {
+    const name = String(req.body?.name || "").trim();
+    if (!name) return res.status(400).json({ error: "Customization group name is required" });
+    const group = await adminService.createCustomizationGroup({
+      name,
+      selectionMode: req.body?.selectionMode === "MULTIPLE" ? "MULTIPLE" : "SINGLE",
+      isRequired: req.body?.isRequired === true,
+      sortOrder: Number.isFinite(Number(req.body?.sortOrder)) ? Number(req.body.sortOrder) : undefined,
+      isActive: req.body?.isActive !== false,
+    });
+    return res.status(201).json({ success: true, group, data: group });
+  } catch (error: any) {
+    console.error("Failed to create customization group:", error);
+    return res.status(500).json({ error: error?.message || "Failed to create customization group" });
+  }
+});
+
+app.patch("/api/admin/customization-groups/:id", async (req, res) => {
+  try {
+    const group = await adminService.updateCustomizationGroup(req.params.id, {
+      name: typeof req.body?.name === "string" && req.body.name.trim() ? req.body.name.trim() : undefined,
+      selectionMode: req.body?.selectionMode,
+      isRequired: typeof req.body?.isRequired === "boolean" ? req.body.isRequired : undefined,
+      sortOrder: Number.isFinite(Number(req.body?.sortOrder)) ? Number(req.body.sortOrder) : undefined,
+      isActive: typeof req.body?.isActive === "boolean" ? req.body.isActive : undefined,
+      isArchived: typeof req.body?.isArchived === "boolean" ? req.body.isArchived : undefined,
+    });
+    return res.json({ success: true, group, data: group });
+  } catch (error: any) {
+    console.error("Failed to update customization group:", error);
+    return res.status(500).json({ error: error?.message || "Failed to update customization group" });
+  }
+});
+
+app.delete("/api/admin/customization-groups/:id", async (req, res) => {
+  try {
+    const group = await adminService.archiveCustomizationGroup(req.params.id);
+    return res.json({ success: true, group, data: group });
+  } catch (error: any) {
+    console.error("Failed to archive customization group:", error);
+    return res.status(500).json({ error: error?.message || "Failed to delete customization group" });
+  }
+});
+
+app.get("/api/admin/customization-options", async (req, res) => {
+  try {
+    const groupId = req.query.groupId as string | undefined;
+    const data = await adminService.listCustomizationOptions({ groupId });
+    res.json({ data });
+  } catch (error: any) {
+    console.error("Failed to list customization options:", error);
+    res.status(500).json({ error: error?.message || "Failed to list customization options" });
+  }
+});
+
+app.post("/api/admin/customization-options", async (req, res) => {
+  try {
+    const name = String(req.body?.name || "").trim();
+    const groupId = String(req.body?.groupId || "");
+    if (!name || !groupId) return res.status(400).json({ error: "Option name and groupId are required" });
+    const option = await adminService.createCustomizationOption({
+      name,
+      groupId,
+      priceModifier: Number(req.body?.priceModifier) || 0,
+      isActive: req.body?.isActive !== false,
+    });
+    return res.status(201).json({ success: true, option, data: option });
+  } catch (error: any) {
+    console.error("Failed to create customization option:", error);
+    return res.status(500).json({ error: error?.message || "Failed to create customization option" });
+  }
+});
+
+app.patch("/api/admin/customization-options/:id", async (req, res) => {
+  try {
+    const option = await adminService.updateCustomizationOption(req.params.id, {
+      name: typeof req.body?.name === "string" && req.body.name.trim() ? req.body.name.trim() : undefined,
+      groupId: typeof req.body?.groupId === "string" ? req.body.groupId : undefined,
+      priceModifier: typeof req.body?.priceModifier === "number" ? req.body.priceModifier : undefined,
+      isActive: typeof req.body?.isActive === "boolean" ? req.body.isActive : undefined,
+      isArchived: typeof req.body?.isArchived === "boolean" ? req.body.isArchived : undefined,
+    });
+    return res.json({ success: true, option, data: option });
+  } catch (error: any) {
+    console.error("Failed to update customization option:", error);
+    return res.status(500).json({ error: error?.message || "Failed to update customization option" });
+  }
+});
+
+app.delete("/api/admin/customization-options/:id", async (req, res) => {
+  try {
+    const option = await adminService.archiveCustomizationOption(req.params.id);
+    return res.json({ success: true, option, data: option });
+  } catch (error: any) {
+    console.error("Failed to archive customization option:", error);
+    return res.status(500).json({ error: error?.message || "Failed to delete customization option" });
+  }
+});
+
+app.post("/api/admin/ingredients", async (req, res) => {
+  try {
+    const name = String(req.body?.name || "").trim();
+    if (!name) return res.status(400).json({ error: "Ingredient name is required" });
+    const ingredient = await inventoryService.createIngredient({
+      name,
+      isAvailable: req.body?.isAvailable !== false,
+    });
+    return res.status(201).json({ success: true, ingredient, data: ingredient });
+  } catch (error: any) {
+    console.error("Failed to create ingredient:", error);
+    return res.status(500).json({ error: error?.message || "Failed to create ingredient" });
+  }
+});
+
+app.patch("/api/admin/ingredients/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const ingredient = await inventoryService.updateIngredient(id, {
+      name: typeof req.body?.name === "string" && req.body.name.trim() ? req.body.name.trim() : undefined,
+      isAvailable: typeof req.body?.isAvailable === "boolean" ? req.body.isAvailable : undefined,
+      isArchived: typeof req.body?.isArchived === "boolean" ? req.body.isArchived : undefined,
+    });
+
+    // Broadcast updated products that depend on this ingredient
+    const db = getDb();
+    const relations = await db.productIngredient.findMany({
+      where: { ingredientId: id },
+      select: { productId: true },
+    });
+    const affectedProducts = Array.from(new Set(relations.map((r) => r.productId)));
+    for (const pId of affectedProducts) {
+      const p = await catalogService.getProductById(pId);
+      if (p) {
+        broadcastProductRealtime("product_updated", formatProductForClient(p) as any);
       }
     }
-  } catch (err) {
-    console.warn("Supabase admin fetch products fallback:", err);
+
+    return res.json({ success: true, ingredient, data: ingredient, affectedProducts, affectedOptions: [] });
+  } catch (error: any) {
+    console.error("Failed to update ingredient:", error);
+    return res.status(500).json({ error: error?.message || "Failed to update ingredient" });
   }
-
-  recomputeAllProductAvailability();
-  const list = Array.from(productsStore.values());
-  res.json({ data: list });
 });
 
-app.get("/api/admin/ingredients", (_req, res) => {
-  res.json({ data: Array.from(ingredientsStore.values()).map((ingredient) => ({
-    ...ingredient,
-    productIds: Array.from(productsStore.values()).filter((product) => product.ingredientIds?.includes(ingredient.id)).map((product) => product.id),
-  })) });
-});
-
-app.get("/api/admin/categories", (_req, res) => res.json({ data: Array.from(categoriesStore.values()) }));
-app.post("/api/admin/categories", (req, res) => {
-  const name = String(req.body?.name || "").trim();
-  if (!name) return res.status(400).json({ error: "Category name is required" });
-  const id = `cat_${Date.now()}`;
-  const category: Category = { id, name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""), sortOrder: Number.isFinite(Number(req.body?.sortOrder)) ? Number(req.body.sortOrder) : categoriesStore.size, productType: req.body?.productType === "FOOD" ? "FOOD" : "BEVERAGE", isActive: req.body?.isActive !== false };
-  categoriesStore.set(id, category);
-  return res.status(201).json({ success: true, category });
-});
-app.patch("/api/admin/categories/:id", (req, res) => {
-  const category = categoriesStore.get(req.params.id);
-  if (!category) return res.status(404).json({ error: "Category not found" });
-  if (typeof req.body?.name === "string" && req.body.name.trim()) category.name = req.body.name.trim();
-  if (req.body?.productType === "BEVERAGE" || req.body?.productType === "FOOD") category.productType = req.body.productType;
-  if (Number.isFinite(Number(req.body?.sortOrder))) category.sortOrder = Number(req.body.sortOrder);
-  if (typeof req.body?.isArchived === "boolean") category.isArchived = req.body.isArchived;
-  if (typeof req.body?.isActive === "boolean") category.isActive = req.body.isActive;
-  return res.json({ success: true, category });
-});
-app.delete("/api/admin/categories/:id", (req, res) => {
-  const category = categoriesStore.get(req.params.id);
-  if (!category) return res.status(404).json({ error: "Category not found" });
-  category.isArchived = true;
-  category.isActive = false;
-  return res.json({ success: true, category });
-});
-
-app.get("/api/admin/customization-groups", (_req, res) => res.json({ data: Array.from(customizationGroupsStore.values()) }));
-app.post("/api/admin/customization-groups", (req, res) => {
-  const name = String(req.body?.name || "").trim();
-  if (!name) return res.status(400).json({ error: "Customization group name is required" });
-  const id = `group_${Date.now()}`;
-  const group: CustomizationGroupConfig = { id, name, selectionMode: req.body?.selectionMode === "MULTIPLE" ? "MULTIPLE" : "SINGLE", isRequired: req.body?.isRequired === true, sortOrder: Number.isFinite(Number(req.body?.sortOrder)) ? Number(req.body.sortOrder) : customizationGroupsStore.size, isActive: req.body?.isActive !== false };
-  customizationGroupsStore.set(id, group);
-  return res.status(201).json({ success: true, group });
-});
-app.patch("/api/admin/customization-groups/:id", (req, res) => {
-  const group = customizationGroupsStore.get(req.params.id);
-  if (!group) return res.status(404).json({ error: "Customization group not found" });
-  if (typeof req.body?.name === "string" && req.body.name.trim()) group.name = req.body.name.trim();
-  if (req.body?.selectionMode === "SINGLE" || req.body?.selectionMode === "MULTIPLE") group.selectionMode = req.body.selectionMode;
-  if (typeof req.body?.isRequired === "boolean") group.isRequired = req.body.isRequired;
-  if (Number.isFinite(Number(req.body?.sortOrder))) group.sortOrder = Number(req.body.sortOrder);
-  if (typeof req.body?.isArchived === "boolean") group.isArchived = req.body.isArchived;
-  if (typeof req.body?.isActive === "boolean") group.isActive = req.body.isActive;
-  return res.json({ success: true, group });
-});
-app.delete("/api/admin/customization-groups/:id", (req, res) => {
-  const group = customizationGroupsStore.get(req.params.id);
-  if (!group) return res.status(404).json({ error: "Customization group not found" });
-  group.isArchived = true;
-  group.isActive = false;
-  return res.json({ success: true, group });
-});
-
-app.get("/api/admin/customization-options", (_req, res) => res.json({ data: Array.from(customizationOptionsStore.values()) }));
-app.post("/api/admin/customization-options", (req, res) => {
-  const name = String(req.body?.name || "").trim();
-  const groupId = String(req.body?.groupId || "");
-  if (!name || !customizationGroupsStore.has(groupId)) return res.status(400).json({ error: "Option name and group are required" });
-  const id = `option_${Date.now()}`;
-  const option: CustomizationOptionConfig = { id, groupId, name, priceModifier: Number(req.body?.priceModifier) || 0, isActive: true };
-  customizationOptionsStore.set(id, option);
-  return res.status(201).json({ success: true, option });
-});
-app.patch("/api/admin/customization-options/:id", (req, res) => {
-  const option = customizationOptionsStore.get(req.params.id);
-  if (!option) return res.status(404).json({ error: "Customization option not found" });
-  if (typeof req.body?.name === "string" && req.body.name.trim()) option.name = req.body.name.trim();
-  if (typeof req.body?.priceModifier === "number" && req.body.priceModifier >= 0) option.priceModifier = req.body.priceModifier;
-  if (typeof req.body?.isActive === "boolean") option.isActive = req.body.isActive;
-  if (typeof req.body?.isArchived === "boolean") option.isArchived = req.body.isArchived;
-  return res.json({ success: true, option });
-});
-app.delete("/api/admin/customization-options/:id", (req, res) => {
-  const option = customizationOptionsStore.get(req.params.id);
-  if (!option) return res.status(404).json({ error: "Customization option not found" });
-  option.isArchived = true;
-  option.isActive = false;
-  return res.json({ success: true, option });
-});
-
-app.post("/api/admin/ingredients", (req, res) => {
-  const name = String(req.body?.name || "").trim();
-  if (!name) return res.status(400).json({ error: "Ingredient name is required" });
-  const id = `ingredient_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-  const ingredient: Ingredient = { id, name, isAvailable: req.body?.isAvailable !== false, productIds: [] };
-  ingredientsStore.set(id, ingredient);
-  return res.status(201).json({ success: true, ingredient });
-});
-
-app.patch("/api/admin/ingredients/:id", (req, res) => {
-  const ingredient = ingredientsStore.get(req.params.id);
-  if (!ingredient) return res.status(404).json({ error: "Ingredient not found" });
-  if (typeof req.body?.name === "string" && req.body.name.trim()) ingredient.name = req.body.name.trim();
-  if (typeof req.body?.isAvailable === "boolean") ingredient.isAvailable = req.body.isAvailable;
-  if (typeof req.body?.isArchived === "boolean") ingredient.isArchived = req.body.isArchived;
-  const affectedProducts: string[] = [];
-  recomputeAllProductAvailability();
-  for (const product of productsStore.values()) {
-    if (product.ingredientIds?.includes(ingredient.id)) {
-      affectedProducts.push(product.id);
-      broadcastProductRealtime("product_updated", product);
-    }
+app.delete("/api/admin/ingredients/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const ingredient = await inventoryService.archiveIngredient(id);
+    return res.json({ success: true, ingredient, data: ingredient });
+  } catch (error: any) {
+    console.error("Failed to delete ingredient:", error);
+    return res.status(500).json({ error: error?.message || "Failed to delete ingredient" });
   }
-  return res.json({ success: true, ingredient, affectedProducts, affectedOptions: [] });
-});
-
-app.delete("/api/admin/ingredients/:id", (req, res) => {
-  const ingredient = ingredientsStore.get(req.params.id);
-  if (!ingredient) return res.status(404).json({ error: "Ingredient not found" });
-  ingredient.isArchived = true;
-  ingredient.isAvailable = false;
-  recomputeAllProductAvailability();
-  return res.json({ success: true, ingredient });
 });
 
 /**
@@ -513,22 +594,14 @@ app.post("/api/admin/products", async (req, res) => {
     const {
       name,
       categoryId,
-      categoryIds = [],
-      categoryName,
-      productType,
       price,
       description = "",
       imageUrl,
       popular = false,
       isAvailable = true,
-      sweetnessAdjustable = true,
-      enabledCustomizationGroups,
-      milkOptions,
-      addonOptions,
-      allowedOptionIds,
-      tags = [],
       ingredientIds = [],
-      isArchived = false,
+      customizationGroupIds = [],
+      allowedOptionIds = [],
     } = req.body || {};
 
     if (!name || typeof name !== "string" || !name.trim()) {
@@ -540,64 +613,26 @@ app.post("/api/admin/products", async (req, res) => {
       return res.status(400).json({ error: "Valid price in PHP is required" });
     }
 
-    const newId = `prod_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const matchedCategory = CATEGORIES.find((c) => c.id === categoryId);
-
-    const newProduct: Product = {
-      id: newId,
+    const newProduct = await catalogService.createProduct({
       name: name.trim(),
-      categoryId: categoryId || (matchedCategory ? matchedCategory.id : "cat_coffee"),
-      categoryIds: Array.isArray(categoryIds) && categoryIds.length ? categoryIds : [categoryId || (matchedCategory ? matchedCategory.id : "cat_coffee")],
-      categoryName: categoryName || (matchedCategory ? matchedCategory.name : "Artisan Coffee"),
-      productType: productType === "FOOD" ? "FOOD" : "BEVERAGE",
-      price: numericPrice,
       description: description?.trim() || "",
+      price: numericPrice,
       imageUrl: imageUrl?.trim() || "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=600&auto=format&fit=crop&q=80",
-      popular: Boolean(popular),
-      isAvailable: isAvailable !== false,
+      categoryId: categoryId || "cat_coffee",
       manualAvailability: isAvailable !== false,
-      sweetnessAdjustable: sweetnessAdjustable !== false,
-      enabledCustomizationGroups: Array.isArray(enabledCustomizationGroups) ? enabledCustomizationGroups : undefined,
-      milkOptions: Array.isArray(milkOptions) ? milkOptions : undefined,
-      addonOptions: Array.isArray(addonOptions) ? addonOptions : undefined,
-      allowedOptionIds: Array.isArray(allowedOptionIds) ? allowedOptionIds.filter((id: unknown) => customizationOptionsStore.has(String(id))) : [],
-      tags: Array.isArray(tags) ? tags : ["Handcrafted", "Featured"],
-      ingredientIds: Array.isArray(ingredientIds) ? ingredientIds.filter((id: unknown) => ingredientsStore.has(String(id))) : [],
-      isArchived: Boolean(isArchived),
-    };
+      popular: Boolean(popular),
+      ingredients: Array.isArray(ingredientIds) ? ingredientIds.map((id: string) => ({ ingredientId: id, isRequired: true })) : [],
+      customizationGroupIds: Array.isArray(customizationGroupIds) ? customizationGroupIds : [],
+      allowedOptionIds: Array.isArray(allowedOptionIds) ? allowedOptionIds : [],
+    });
 
-    productsStore.set(newId, newProduct);
-
-    // Sync to Supabase if configured
-    try {
-      const supabaseAdmin = getSupabaseAdminClient();
-      if (supabaseAdmin) {
-        await supabaseAdmin.from("products").insert([
-          {
-            id: newProduct.id,
-            name: newProduct.name,
-            category_id: newProduct.categoryId,
-            price: newProduct.price,
-            description: newProduct.description,
-            image_url: newProduct.imageUrl,
-            popular: newProduct.popular,
-            is_available: newProduct.isAvailable,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ]);
-      }
-    } catch (dbErr) {
-      console.warn("Supabase admin insert warning:", dbErr);
-    }
-
-    // Broadcast realtime update
-    broadcastProductRealtime("product_updated", newProduct);
+    const formatted = formatProductForClient(newProduct);
+    broadcastProductRealtime("product_updated", formatted as any);
 
     return res.status(201).json({
       success: true,
-      product: newProduct,
-      message: `Product "${newProduct.name}" created successfully`,
+      product: formatted,
+      message: `Product "${formatted.name}" created successfully`,
     });
   } catch (error: any) {
     console.error("Failed to create product:", error);
@@ -607,275 +642,243 @@ app.post("/api/admin/products", async (req, res) => {
 
 /**
  * DELETE /api/admin/products/:id
- * Permanently removes product from catalog
+ * Permanently removes / archives product from catalog
  */
 app.delete("/api/admin/products/:id", async (req, res) => {
   const { id } = req.params;
-  const product = productsStore.get(id);
-  if (!product) {
-    return res.status(404).json({ error: "Product not found" });
-  }
-
-  productsStore.delete(id);
-
-  // Sync to Supabase if configured
   try {
-    const supabaseAdmin = getSupabaseAdminClient();
-    if (supabaseAdmin) {
-      await supabaseAdmin.from("products").delete().eq("id", id);
-    }
-  } catch (dbErr) {
-    console.warn("Supabase admin delete warning:", dbErr);
+    const archived = await catalogService.archiveProduct(id);
+    const formatted = formatProductForClient(archived);
+    broadcastProductRealtime("product_updated", { ...formatted, isAvailable: false } as any);
+
+    return res.json({
+      success: true,
+      product: formatted,
+      message: `Product "${formatted.name}" deleted successfully`,
+      id,
+    });
+  } catch (error: any) {
+    console.error("Failed to delete product:", error);
+    return res.status(500).json({ error: error?.message || "Failed to delete product" });
   }
-
-  // Broadcast deletion / update (availability false)
-  broadcastProductRealtime("product_updated", { ...product, isAvailable: false });
-
-  return res.json({
-    success: true,
-    message: `Product "${product.name}" deleted successfully`,
-    id,
-  });
 });
 
 /**
  * PATCH /api/admin/products/:id
  * Updates product availability (In Stock / Sold Out), price, description, popular badge
- * Broadcasts instant updates to connected clients via SSE & Supabase Realtime
  */
 app.patch("/api/admin/products/:id", async (req, res) => {
   const { id } = req.params;
   const updates = req.body || {};
 
-  const product = productsStore.get(id);
-  if (!product) {
-    return res.status(404).json({ error: "Product not found" });
-  }
-
-  // Apply updates
-  if (typeof updates.isAvailable === "boolean") {
-    product.manualAvailability = updates.isAvailable;
-  }
-  if (typeof updates.price === "number" && !isNaN(updates.price) && updates.price >= 0) {
-    product.price = updates.price;
-  }
-  if (typeof updates.description === "string") {
-    product.description = updates.description.trim();
-  }
-  if (typeof updates.popular === "boolean") {
-    product.popular = updates.popular;
-  }
-  if (typeof updates.name === "string" && updates.name.trim()) {
-    product.name = updates.name.trim();
-  }
-  if (updates.productType === "BEVERAGE" || updates.productType === "FOOD") product.productType = updates.productType;
-  if (Array.isArray(updates.categoryIds) && updates.categoryIds.length) {
-    product.categoryIds = updates.categoryIds;
-    product.categoryId = String(updates.categoryIds[0]);
-    product.categoryName = categoriesStore.get(product.categoryId)?.name || product.categoryName;
-  }
-  if (Array.isArray(updates.enabledCustomizationGroups)) {
-    product.enabledCustomizationGroups = updates.enabledCustomizationGroups.filter(
-      (group: unknown) => ["ice", "sugar", "milk", "addons"].includes(String(group))
-    );
-  }
-  if (Array.isArray(updates.milkOptions)) product.milkOptions = updates.milkOptions;
-  if (Array.isArray(updates.addonOptions)) product.addonOptions = updates.addonOptions;
-  if (Array.isArray(updates.allowedOptionIds)) product.allowedOptionIds = updates.allowedOptionIds.map(String);
-  if (Array.isArray(updates.ingredientIds)) {
-    product.ingredientIds = updates.ingredientIds.filter((ingredientId: unknown) => ingredientsStore.has(String(ingredientId)));
-  }
-  if (typeof updates.isArchived === "boolean") product.isArchived = updates.isArchived;
-
-  recomputeProductAvailability(product);
-  productsStore.set(id, product);
-
-  // Sync to Supabase table using Service Role key (RLS bypass on authenticated server)
   try {
-    const supabaseAdmin = getSupabaseAdminClient();
-    if (supabaseAdmin) {
-      await supabaseAdmin
-        .from("products")
-        .update({
-          is_available: product.isAvailable,
-          price: product.price,
-          description: product.description,
-          popular: product.popular,
-          name: product.name,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", id);
-    }
-  } catch (err) {
-    console.warn("Supabase admin write warning:", err);
+    const updated = await catalogService.updateProduct(id, {
+      name: typeof updates.name === "string" && updates.name.trim() ? updates.name.trim() : undefined,
+      description: typeof updates.description === "string" ? updates.description.trim() : undefined,
+      price: typeof updates.price === "number" && !isNaN(updates.price) && updates.price >= 0 ? updates.price : undefined,
+      imageUrl: typeof updates.imageUrl === "string" ? updates.imageUrl.trim() : undefined,
+      categoryId: typeof updates.categoryId === "string" ? updates.categoryId : (Array.isArray(updates.categoryIds) && updates.categoryIds[0] ? String(updates.categoryIds[0]) : undefined),
+      manualAvailability: typeof updates.isAvailable === "boolean" ? updates.isAvailable : undefined,
+      popular: typeof updates.popular === "boolean" ? updates.popular : undefined,
+      isArchived: typeof updates.isArchived === "boolean" ? updates.isArchived : undefined,
+      ingredients: Array.isArray(updates.ingredientIds) ? updates.ingredientIds.map((ingId: string) => ({ ingredientId: ingId, isRequired: true })) : undefined,
+      customizationGroupIds: Array.isArray(updates.customizationGroupIds) ? updates.customizationGroupIds : undefined,
+      allowedOptionIds: Array.isArray(updates.allowedOptionIds) ? updates.allowedOptionIds.map(String) : undefined,
+    });
+
+    const formatted = formatProductForClient(updated);
+    broadcastProductRealtime("product_updated", formatted as any);
+
+    return res.json({
+      success: true,
+      product: formatted,
+      message: `Updated ${formatted.name} (${formatted.isAvailable ? "In Stock" : "86'd / Sold Out"})`,
+    });
+  } catch (error: any) {
+    console.error("Failed to update product:", error);
+    return res.status(500).json({ error: error?.message || "Failed to update product" });
   }
-
-  // Broadcast realtime update to kitchen KDS, POS, and public customer storefront
-  broadcastProductRealtime("product_updated", product);
-
-  return res.json({
-    success: true,
-    product,
-    message: `Updated ${product.name} (${product.isAvailable ? "In Stock" : "86'd / Sold Out"})`,
-  });
 });
 
+// ==============================================================================
+// CHECKOUT & ORDER PIPELINE (AUTHORITATIVE PRISMA ORDER SERVICE)
+// ==============================================================================
 
-// 4. Checkout API (PayMongo Dynamic QR Ph / Cash at Counter)
-app.post("/api/checkout", async (req, res) => {
-  try {
-    const body = req.body as CheckoutPayload;
-    const { items, customerName, orderType = "DINE_IN", paymentMethod, notes } = body;
+async function processCheckout(body: CheckoutPayload) {
+  const { items, customerName, orderType = "DINE_IN", paymentMethod, notes } = body;
 
-    if (!items || items.length === 0) {
-      return res.status(400).json({ error: "Cart is empty. Please add items before checking out." });
-    }
+  if (!items || items.length === 0) {
+    return {
+      status: 400,
+      payload: { error: "Cart is empty. Please add items before checking out." },
+    };
+  }
 
-    // Cart data is a client-side snapshot. Re-check the canonical catalog immediately
-    // before payment so an item sold out after it was added can never be submitted.
-    const unavailable = items
-      .map((item) => ({ item, product: productsStore.get(item.productId) }))
-      .filter(({ product }) => !product || product.isAvailable === false);
-    if (unavailable.length > 0) {
-      return res.status(409).json({
+  const invalidQuantity = items.find((item) => !Number.isInteger(item.quantity) || item.quantity < 1);
+  if (invalidQuantity) {
+    return {
+      status: 400,
+      payload: { error: "Each cart item must have a valid quantity." },
+    };
+  }
+
+  // Pre-validate product existence & availability via catalogService
+  const productIds = items.map((i) => i.productId);
+  const products = await Promise.all(productIds.map((id) => catalogService.getProductById(id)));
+  const unavailable = items
+    .map((item, idx) => ({ item, product: products[idx] }))
+    .filter(({ product }) => !product || product.isAvailable === false);
+
+  if (unavailable.length > 0) {
+    return {
+      status: 409,
+      payload: {
         success: false,
         code: "PRODUCT_UNAVAILABLE",
         error: `Unavailable item: ${unavailable[0].item.productName || "This product"}. Please remove it or choose a replacement.`,
         message: `Unavailable item: ${unavailable[0].item.productName || "This product"}. Please remove it or choose a replacement.`,
         unavailableProductIds: unavailable.map(({ item }) => item.productId),
-      });
-    }
-    const invalidQuantity = items.find((item) => !Number.isInteger(item.quantity) || item.quantity < 1);
-    if (invalidQuantity) {
-      return res.status(400).json({ error: "Each cart item must have a valid quantity." });
-    }
-
-    const subtotal = items.reduce((sum, it) => sum + (it.subtotal || it.unitPrice * it.quantity), 0);
-    const discount = Math.max(0, Number(body.discount) || 0);
-    const serviceFee = 0;
-    const totalAmount = Math.max(0, Math.round((subtotal - discount + serviceFee) * 100) / 100);
-
-    if (paymentMethod === "CASH" && body.paymentStatus === "PAID" && Number(body.cashTendered || 0) < totalAmount) {
-      return res.status(400).json({ success: false, code: "INSUFFICIENT_CASH", message: "Cash tendered is less than the order total." });
-    }
-
-    const orderNumber = getNextOrderNumber();
-    let qrCodeUrl: string | null = null;
-    let paymentIntentId: string | null = null;
-    let paymentMethodId: string | null = null;
-
-    if (paymentMethod === "QRPH") {
-      const qrRes = await createPayMongoQRPhPayment(
-        totalAmount,
-        orderNumber,
-        `Artisan Cafe - Order ${orderNumber}`
-      );
-      qrCodeUrl = qrRes.qrImageUrl;
-      paymentIntentId = qrRes.paymentIntentId;
-      paymentMethodId = qrRes.paymentMethodId;
-    }
-
-    const now = new Date().toISOString();
-    const orderId = `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-
-    const orderNotes = [
-      notes,
-      body.promoCode ? `Promo: ${body.promoCode} (-₱${discount.toFixed(2)})` : null,
-    ]
-      .filter(Boolean)
-      .join(" • ");
-
-    const newOrder: Order = {
-      id: orderId,
-      orderNumber,
-      status: paymentMethod === "CASH" && body.paymentStatus === "PAID" ? "PAID" : "PENDING_PAYMENT",
-      paymentMethod,
-      paymentIntentId,
-      paymentMethodId,
-      qrCodeUrl,
-      customerName: customerName?.trim() ? customerName.trim() : "Guest",
-      orderType: orderType || "DINE_IN",
-      notes: orderNotes || null,
-      subtotal,
-      serviceFee,
-      totalAmount,
-      items: items.map((item, index) => ({
-        id: `item_${index + 1}`,
-        productId: item.productId,
-        productName: item.productName,
-        unitPrice: item.unitPrice,
-        quantity: item.quantity,
-        subtotal: item.subtotal,
-        customizations: item.customizations,
-        notes: item.notes,
-      })),
-      createdAt: now,
-      updatedAt: now,
-      estimatedReadyTime: "7 - 10 mins",
+      },
     };
+  }
 
-    ordersStore.set(orderId, newOrder);
+  // Resolve option names to DB optionIds
+  const db = getDb();
+  const allOptions = await db.customizationOption.findMany({
+    where: { isActive: true, isArchived: false },
+  });
+  const optionByName = new Map(allOptions.map((o) => [o.name.toLowerCase().trim(), o]));
 
-    // Persist to Prisma database if configured
-    const prisma = getPrismaClient();
-    if (prisma) {
-      try {
-        await prisma.order.create({
-          data: {
-            id: orderId,
-            orderNumber,
-            status: newOrder.status,
-            paymentMethod,
-            paymentIntentId,
-            paymentMethodId,
-            qrCodeUrl,
-            customerName: newOrder.customerName,
-            orderType,
-            notes,
-            subtotal,
-            serviceFee,
-            totalAmount,
-            items: {
-              create: items.map((it) => ({
-                productName: it.productName,
-                unitPrice: it.unitPrice,
-                quantity: it.quantity,
-                subtotal: it.subtotal,
-                customizations: it.customizations ? JSON.parse(JSON.stringify(it.customizations)) : undefined,
-                notes: it.notes,
-              })),
-            },
-          },
-        });
-      } catch (dbErr) {
-        console.warn("⚠️ Prisma order persistence warning (using active store):", (dbErr as Error)?.message || dbErr);
+  const mappedItems = items.map((it) => {
+    const selectedOptionIds: string[] = Array.isArray((it as any).selectedOptionIds)
+      ? [...(it as any).selectedOptionIds]
+      : [];
+
+    if (it.customizations) {
+      if (it.customizations.milkOption) {
+        const match = optionByName.get(it.customizations.milkOption.toLowerCase().trim());
+        if (match && !selectedOptionIds.includes(match.id)) {
+          selectedOptionIds.push(match.id);
+        }
+      }
+      if (Array.isArray(it.customizations.addOns)) {
+        for (const addonStr of it.customizations.addOns) {
+          const cleanName = addonStr.replace(/\s*\(\+.*?\)/, "").trim().toLowerCase();
+          const match = optionByName.get(cleanName);
+          if (match && !selectedOptionIds.includes(match.id)) {
+            selectedOptionIds.push(match.id);
+          }
+        }
       }
     }
 
-    // Broadcast new order to Kitchen Display System (KDS)
-    broadcastRealtime("order_created", newOrder);
+    return {
+      productId: it.productId,
+      quantity: Math.max(1, Math.floor(Number(it.quantity) || 1)),
+      customizations: it.customizations,
+      notes: it.notes?.trim() || undefined,
+      selectedOptionIds,
+      modifiers: (it as any).modifiers,
+    };
+  });
 
-    return res.status(201).json({
+  const orderNotes = [
+    notes,
+    body.promoCode ? `Promo: ${body.promoCode}` : null,
+  ].filter(Boolean).join(" • ") || undefined;
+
+  // Authoritative creation via orderService (calculates pricing server-side)
+  const createdOrder = await orderService.createOrder({
+    customerName: customerName?.trim() || "Guest",
+    orderType: orderType || "DINE_IN",
+    paymentMethod: paymentMethod === "QRPH" ? "QRPH" : "CASH",
+    notes: orderNotes,
+    serviceFee: 0,
+    items: mappedItems,
+  });
+
+  // Handle CASH paid at counter
+  if (paymentMethod === "CASH" && body.paymentStatus === "PAID") {
+    if (Number(body.cashTendered || 0) < createdOrder.totalAmount) {
+      return {
+        status: 400,
+        payload: { success: false, code: "INSUFFICIENT_CASH", message: "Cash tendered is less than the order total." },
+      };
+    }
+    await orderService.updateOrderStatus(createdOrder.id, "PAID");
+    createdOrder.status = "PAID";
+  }
+
+  // Handle QRPH PayMongo dynamic generation
+  let qrCodeUrl: string | null = null;
+  let paymentIntentId: string | null = null;
+  let paymentMethodId: string | null = null;
+
+  if (paymentMethod === "QRPH") {
+    const qrRes = await createPayMongoQRPhPayment(
+      createdOrder.totalAmount,
+      createdOrder.orderNumber,
+      `Artisan Cafe - Order ${createdOrder.orderNumber}`
+    );
+    qrCodeUrl = qrRes.qrImageUrl;
+    paymentIntentId = qrRes.paymentIntentId;
+    paymentMethodId = qrRes.paymentMethodId;
+
+    await db.order.update({
+      where: { id: createdOrder.id },
+      data: {
+        qrCodeUrl,
+        paymentIntentId,
+        paymentMethodId,
+      },
+    });
+
+    createdOrder.qrCodeUrl = qrCodeUrl;
+    createdOrder.paymentIntentId = paymentIntentId;
+    createdOrder.paymentMethodId = paymentMethodId;
+  }
+
+  // Broadcast realtime order_created to Kitchen KDS and customer live stream
+  broadcastRealtime("order_created", createdOrder as any);
+
+  return {
+    status: 201,
+    order: createdOrder,
+    payload: {
       success: true,
-      orderNumber,
-      order: newOrder,
-      qrCodeUrl,
-      paymentIntentId,
+      orderNumber: createdOrder.orderNumber,
+      order: createdOrder,
+      qrCodeUrl: createdOrder.qrCodeUrl,
+      paymentIntentId: createdOrder.paymentIntentId,
       message:
         paymentMethod === "QRPH"
           ? "Dynamic QR Ph generated. Scan using any QR Ph compliant app."
-          : `Order #${orderNumber} registered. Please proceed to payment counter.`,
-    });
+          : `Order #${createdOrder.orderNumber} registered. Please proceed to payment counter.`,
+    },
+  };
+}
+
+// 4. Checkout API
+app.post("/api/checkout", async (req, res) => {
+  try {
+    const result = await processCheckout(req.body);
+    return res.status(result.status).json(result.payload);
   } catch (error: any) {
     console.error("Error in /api/checkout:", error);
-    return res.status(500).json({
-      error: error?.message || "Internal server error during checkout",
-    });
+    const msg = error?.message || "Internal server error during checkout";
+    if (msg.includes("sold out") || msg.includes("no longer available")) {
+      return res.status(409).json({
+        success: false,
+        code: "PRODUCT_UNAVAILABLE",
+        error: msg,
+        message: msg,
+      });
+    }
+    return res.status(500).json({ error: msg });
   }
 });
-// 5. Get all orders (for staff / KDS dashboard)
-// Canonical order contract. It delegates to the established checkout pipeline so
-// availability, pricing, payment, persistence, and KDS broadcasting stay identical.
+
+// 5. Orders API (Canonical idempotency-protected order creation)
 app.post("/api/orders", async (req, res) => {
   try {
     const idempotencyKey = req.get("Idempotency-Key")?.trim();
@@ -884,59 +887,63 @@ app.post("/api/orders", async (req, res) => {
     }
     const existingOrderId = orderIdempotencyStore.get(idempotencyKey);
     if (existingOrderId) {
-      const existingOrder = ordersStore.get(existingOrderId);
+      const existingOrder = await orderService.getOrderById(existingOrderId);
       return res.status(409).json({ success: false, code: "DUPLICATE_REQUEST", message: "This order request has already been processed.", order: existingOrder });
     }
-    const upstream = await fetch(`http://127.0.0.1:${PORT}/api/checkout`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req.body),
+
+    const result = await processCheckout(req.body);
+    if (result.order?.id) {
+      orderIdempotencyStore.set(idempotencyKey, result.order.id);
+    }
+    return res.status(result.status).json(result.payload);
+  } catch (error: any) {
+    console.error("Error in /api/orders:", error);
+    const msg = error?.message || "Internal server error during order creation";
+    if (msg.includes("sold out") || msg.includes("no longer available")) {
+      return res.status(409).json({
+        success: false,
+        code: "PRODUCT_UNAVAILABLE",
+        error: msg,
+        message: msg,
+      });
+    }
+    return res.status(500).json({ error: msg });
+  }
+});
+
+// Get all orders (for staff / KDS dashboard)
+app.get("/api/orders", async (req, res) => {
+  try {
+    const list = await orderService.listOrders({
+      status: req.query.status as any,
+      orderType: req.query.orderType as any,
     });
-    const payload = await upstream.json();
-    if (upstream.ok && payload.order?.id) orderIdempotencyStore.set(idempotencyKey, payload.order.id);
-    return res.status(upstream.status).json(payload);
-  } catch (error) {
-    return res.status(502).json({ success: false, code: "ORDER_SERVICE_UNAVAILABLE", message: "Order service is unavailable." });
+    res.json({ data: list });
+  } catch (error: any) {
+    console.error("Failed to list orders:", error);
+    res.status(500).json({ error: error?.message || "Failed to list orders" });
   }
 });
 
-app.get("/api/orders", (_req, res) => {
-  const list = Array.from(ordersStore.values()).sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
-  res.json({ data: list });
-});
-
-// 6. Get single order by ID or orderNumber
-app.get("/api/orders/:idOrNumber", (req, res) => {
-  const { idOrNumber } = req.params;
-  const order =
-    ordersStore.get(idOrNumber) ||
-    Array.from(ordersStore.values()).find(
-      (o) => o.orderNumber === idOrNumber || o.id === idOrNumber
-    );
-
-  if (!order) {
-    return res.status(404).json({ error: "Order not found" });
+// Get single order by ID or orderNumber
+app.get("/api/orders/:idOrNumber", async (req, res) => {
+  try {
+    const { idOrNumber } = req.params;
+    const order = await orderService.getOrderById(idOrNumber);
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+    res.json({ data: order, order });
+  } catch (error: any) {
+    console.error("Failed to get order:", error);
+    res.status(500).json({ error: error?.message || "Failed to get order" });
   }
-
-  res.json({ data: order });
 });
 
-// 7. Update order status (Staff / KDS buttons: "Mark as Ready" -> READY, "Complete Order" -> COMPLETED)
-app.patch("/api/orders/:id/status", (req, res) => {
+// Update order status (Staff / KDS buttons)
+app.patch("/api/orders/:id/status", async (req, res) => {
   const { id } = req.params;
   const { status } = req.body as { status: OrderStatus };
-
-  const order =
-    ordersStore.get(id) ||
-    Array.from(ordersStore.values()).find(
-      (o) => o.orderNumber === id || o.id === id
-    );
-
-  if (!order) {
-    return res.status(404).json({ error: "Order not found" });
-  }
 
   const validStatuses: OrderStatus[] = [
     "PENDING_PAYMENT",
@@ -950,18 +957,18 @@ app.patch("/api/orders/:id/status", (req, res) => {
     return res.status(400).json({ error: "Invalid status provided" });
   }
 
-  order.status = status;
-  order.updatedAt = new Date().toISOString();
-  ordersStore.set(order.id, order);
-
-  // Broadcast status update to Kitchen KDS and Live Customer Receipt in real-time
-  broadcastRealtime("order_status_updated", order);
-
-  res.json({
-    success: true,
-    order,
-    message: `Order ${order.orderNumber} status updated to ${status}`,
-  });
+  try {
+    const updated = await orderService.updateOrderStatus(id, status);
+    broadcastRealtime("order_status_updated", updated as any);
+    return res.json({
+      success: true,
+      order: updated,
+      message: `Order ${updated.orderNumber} status updated to ${status}`,
+    });
+  } catch (error: any) {
+    console.error("Failed to update order status:", error);
+    return res.status(500).json({ error: error?.message || "Failed to update order status" });
+  }
 });
 
 /**
@@ -1001,7 +1008,7 @@ function verifySignature(
 }
 
 // 8. PayMongo Webhook API Endpoint: /api/webhooks/paymongo & /api/paymongo-webhook
-const handlePayMongoWebhook = (req: any, res: Response) => {
+const handlePayMongoWebhook = async (req: any, res: Response) => {
   const signatureHeader = req.headers["paymongo-signature"] as string | undefined;
   const webhookSecret = process.env.PAYMONGO_WEBHOOK_SECRET_KEY;
   const rawBody = req.rawBody || JSON.stringify(req.body);
@@ -1020,32 +1027,38 @@ const handlePayMongoWebhook = (req: any, res: Response) => {
   if (eventType === "payment.paid" || eventType === "payment_intent.succeeded") {
     const paymentIntentId = resource?.attributes?.payment_intent_id || resource?.id;
     if (paymentIntentId) {
-      let matchedOrder: Order | null = null;
-
-      for (const [id, order] of ordersStore.entries()) {
-        if (order.paymentIntentId === paymentIntentId || order.id === paymentIntentId) {
-          // As required: Transition from PENDING_PAYMENT to PREPARING
-          order.status = "PREPARING";
-          order.updatedAt = new Date().toISOString();
-          ordersStore.set(id, order);
-          matchedOrder = order;
-          break;
-        }
-      }
-
-      if (matchedOrder) {
-        console.log(
-          `[PayMongo Webhook] Order ${matchedOrder.orderNumber} successfully updated to PREPARING`
-        );
-        // Broadcast via Supabase Realtime and SSE on channel kitchen-orders with event order_paid
-        broadcastRealtime("order_paid", matchedOrder);
-
-        return res.json({
-          success: true,
-          matchedOrderNumber: matchedOrder.orderNumber,
-          status: matchedOrder.status,
-          message: "Order updated to PREPARING and broadcast to Kitchen KDS",
+      try {
+        const db = getDb();
+        const matched = await db.order.findFirst({
+          where: {
+            OR: [
+              { paymentIntentId },
+              { id: paymentIntentId },
+            ],
+          },
         });
+
+        if (matched) {
+          const updatedOrder = await orderService.recordPayment({
+            idOrOrderNumber: matched.id,
+            paymentIntentId,
+            status: "PREPARING",
+          });
+
+          console.log(
+            `[PayMongo Webhook] Order ${updatedOrder.orderNumber} successfully updated to PREPARING`
+          );
+          broadcastRealtime("order_paid", updatedOrder as any);
+
+          return res.json({
+            success: true,
+            matchedOrderNumber: updatedOrder.orderNumber,
+            status: updatedOrder.status,
+            message: "Order updated to PREPARING and broadcast to Kitchen KDS",
+          });
+        }
+      } catch (err) {
+        console.error("[PayMongo Webhook] Error recording payment:", err);
       }
     }
   }
@@ -1057,44 +1070,54 @@ app.post("/api/webhooks/paymongo", handlePayMongoWebhook);
 app.post("/api/paymongo-webhook", handlePayMongoWebhook);
 
 // 9. Simulation Endpoint: /api/webhooks/paymongo/simulate, /api/simulate-webhook, /api/simulate/webhook-payment
-// Allows one-click testing of PayMongo payment.paid webhook in sandbox preview
-const handleSimulateWebhook = (req: any, res: Response) => {
+const handleSimulateWebhook = async (req: any, res: Response) => {
   const { orderId, paymentIntentId } = req.body || {};
 
-  let targetOrder: Order | undefined = undefined;
+  try {
+    const db = getDb();
+    let targetOrder: any = null;
 
-  if (orderId) {
-    targetOrder = ordersStore.get(orderId);
+    if (orderId) {
+      targetOrder = await db.order.findFirst({
+        where: {
+          OR: [{ id: orderId }, { orderNumber: orderId }],
+        },
+      });
+    }
+
+    if (!targetOrder && paymentIntentId) {
+      targetOrder = await db.order.findFirst({
+        where: { paymentIntentId },
+      });
+    }
+
+    if (!targetOrder) {
+      targetOrder = await db.order.findFirst({
+        where: { status: "PENDING_PAYMENT", paymentMethod: "QRPH" },
+        orderBy: { createdAt: "desc" },
+      });
+    }
+
+    if (!targetOrder) {
+      return res.status(404).json({ error: "No matching pending QR Ph order found to simulate" });
+    }
+
+    const updated = await orderService.recordPayment({
+      idOrOrderNumber: targetOrder.id,
+      status: "PREPARING",
+    });
+
+    broadcastRealtime("order_paid", updated as any);
+
+    return res.json({
+      success: true,
+      message: `Simulated PayMongo payment.paid webhook for Order #${updated.orderNumber}`,
+      order: updated,
+    });
+  } catch (error: any) {
+    console.error("Error in simulate webhook:", error);
+    return res.status(500).json({ error: error?.message || "Failed to simulate webhook" });
   }
-  if (!targetOrder && paymentIntentId) {
-    targetOrder = Array.from(ordersStore.values()).find(
-      (o) => o.paymentIntentId === paymentIntentId
-    );
-  }
-  if (!targetOrder) {
-    // Pick the latest pending QRPH order
-    targetOrder = Array.from(ordersStore.values())
-      .reverse()
-      .find((o) => o.status === "PENDING_PAYMENT" && o.paymentMethod === "QRPH");
-  }
-
-  if (!targetOrder) {
-    return res.status(404).json({ error: "No matching pending QR Ph order found to simulate" });
-  }
-
-  // Update order to PREPARING (as specified in requirement)
-  targetOrder.status = "PREPARING";
-  targetOrder.updatedAt = new Date().toISOString();
-  ordersStore.set(targetOrder.id, targetOrder);
-
-  // Broadcast to kitchen-orders and customer live receipt
-  broadcastRealtime("order_paid", targetOrder);
-
-  return res.json({
-    success: true,
-    message: `Simulated PayMongo payment.paid webhook for Order #${targetOrder.orderNumber}`,
-    order: targetOrder,
-  });
 };
 
 app.post("/api/webhooks/paymongo/simulate", handleSimulateWebhook);

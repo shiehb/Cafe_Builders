@@ -1,7 +1,47 @@
 import { NextResponse } from "next/server";
 import { adminAuth, jsonError } from "../../../../../lib/adminRoute";
-import { ingredientsStore, ingredientProducts, optionsStore, recomputeAllProductAvailability, validateName } from "../../../../../lib/adminStore";
+import { inventoryService } from "../../../../../services";
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) { const denied = adminAuth(request); if (denied) return denied; const ingredient = ingredientsStore.get((await params).id); if (!ingredient) return jsonError("Ingredient not found.", 404, "NOT_FOUND"); return NextResponse.json({ success: true, data: { ...ingredient, productIds: ingredientProducts(ingredient.id).map((product) => product.id) } }); }
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) { const denied = adminAuth(request); if (denied) return denied; const ingredient = ingredientsStore.get((await params).id); if (!ingredient) return jsonError("Ingredient not found.", 404, "NOT_FOUND"); const body = await request.json(); const name = body.name === undefined ? ingredient.name : validateName(body.name); if (!name) return jsonError("A valid ingredient name is required."); Object.assign(ingredient, { name, isAvailable: body.isAvailable === undefined ? ingredient.isAvailable : Boolean(body.isAvailable), isArchived: body.isArchived === undefined ? ingredient.isArchived : Boolean(body.isArchived) }); recomputeAllProductAvailability(); const affectedProducts = ingredientProducts(ingredient.id); const affectedOptions = Array.from(optionsStore.values()).filter((option) => option.name.toLowerCase() === ingredient.name.toLowerCase()).map((option) => option.id); return NextResponse.json({ success: true, data: ingredient, ingredient, affectedProducts: affectedProducts.map((product) => product.id), affectedOptions }); }
-export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) { const denied = adminAuth(request); if (denied) return denied; const ingredient = ingredientsStore.get((await params).id); if (!ingredient) return jsonError("Ingredient not found.", 404, "NOT_FOUND"); ingredient.isArchived = true; ingredient.isAvailable = false; recomputeAllProductAvailability(); return NextResponse.json({ success: true, data: ingredient, ingredient }); }
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = adminAuth(request);
+  if (denied) return denied;
+  const { id } = await params;
+  try {
+    const ingredient = await inventoryService.getIngredientById(id);
+    if (!ingredient) return jsonError("Ingredient not found.", 404, "NOT_FOUND");
+    return NextResponse.json({ success: true, data: ingredient, ingredient });
+  } catch (error: any) {
+    return jsonError(error?.message || "Failed to get ingredient", 500, "SERVER_ERROR");
+  }
+}
+
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = adminAuth(request);
+  if (denied) return denied;
+  const { id } = await params;
+  try {
+    const body = await request.json();
+    const name = body.name !== undefined ? String(body.name).trim() : undefined;
+    if (name !== undefined && !name) return jsonError("A valid ingredient name is required.");
+    const ingredient = await inventoryService.updateIngredient(id, {
+      name,
+      isAvailable: body.isAvailable !== undefined ? Boolean(body.isAvailable) : undefined,
+      isArchived: body.isArchived !== undefined ? Boolean(body.isArchived) : undefined,
+    });
+    return NextResponse.json({ success: true, data: ingredient, ingredient });
+  } catch (error: any) {
+    return jsonError(error?.message || "Failed to update ingredient", 500, "SERVER_ERROR");
+  }
+}
+
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = adminAuth(request);
+  if (denied) return denied;
+  const { id } = await params;
+  try {
+    const ingredient = await inventoryService.archiveIngredient(id);
+    return NextResponse.json({ success: true, data: ingredient, ingredient });
+  } catch (error: any) {
+    return jsonError(error?.message || "Failed to delete ingredient", 500, "SERVER_ERROR");
+  }
+}
