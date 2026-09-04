@@ -66,13 +66,13 @@ model Category {
 // ---------------------------------------------------------------------------
 
 model Ingredient {
-  id          String              @id
+  id          String             @id
   name        String
-  isAvailable Boolean             @default(true)
-  isArchived  Boolean             @default(false)
+  isAvailable Boolean            @default(true)
+  isArchived  Boolean            @default(false)
   products    ProductIngredient[]
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 
   @@map("ingredients")
 }
@@ -138,23 +138,23 @@ model CustomizationOption {
 // ---------------------------------------------------------------------------
 
 model Product {
-  id                  String                       @id @default(cuid())
-  name                String
-  description         String
-  price               Decimal                      @db.Decimal(10, 2)
-  imageUrl            String
-  categoryId          String
-  category            Category                     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  isAvailable         Boolean                      @default(true)
-  manualAvailability  Boolean                      @default(true)
-  popular             Boolean                      @default(false)
-  isArchived          Boolean                      @default(false)
-  orderItems          OrderItem[]
-  ingredients         ProductIngredient[]
+  id                 String                      @id @default(cuid())
+  name               String
+  description        String
+  price              Decimal                     @db.Decimal(10, 2)
+  imageUrl           String
+  categoryId         String
+  category           Category                    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  isAvailable        Boolean                     @default(true)
+  manualAvailability Boolean                     @default(true)
+  popular            Boolean                     @default(false)
+  isArchived         Boolean                     @default(false)
+  orderItems         OrderItem[]
+  ingredients        ProductIngredient[]
   customizationGroups ProductCustomizationGroup[]
-  allowedOptions      ProductCustomizationOption[]
-  createdAt           DateTime                     @default(now())
-  updatedAt           DateTime                     @updatedAt
+  allowedOptions     ProductCustomizationOption[]
+  createdAt          DateTime                    @default(now())
+  updatedAt          DateTime                    @updatedAt
 
   @@map("products")
 }
