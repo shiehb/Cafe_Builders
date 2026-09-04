@@ -2,7 +2,6 @@
   "name": "cafe-qr-ph-ordering",
   "private": true,
   "version": "1.0.0",
-  "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
     "build": "next build",
@@ -21,10 +20,10 @@
     "express": "^4.21.2",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
-    "next": "^16.3.4",
+    "next": "^15.1.7",
     "qrcode": "^1.5.4",
-    "react": "^19.0.1",
-    "react-dom": "^19.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "tailwind-merge": "^3.6.0",
     "tsx": "^4.21.0",
     "ws": "^8.21.3"

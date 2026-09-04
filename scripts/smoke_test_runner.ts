@@ -59,6 +59,9 @@ async function main() {
     }),
   });
   const catData = await catRes.json();
+  if (!catRes.ok) {
+    throw new Error(`Category creation failed: ${JSON.stringify(catData)}`);
+  }
   const testCategory = catData.category || catData.data;
   console.log("1. Created Category:", testCategory.id, testCategory.name);
 
@@ -473,6 +476,9 @@ async function main() {
     .filter((r) => r.status === 201 && r.data.success)
     .map((r) => r.data.order);
   const failedOrders = concurrentResults.filter((r) => r.status !== 201);
+  if (failedOrders.length > 0) {
+    console.log("Failed orders data:", JSON.stringify(failedOrders, null, 2));
+  }
 
   console.log(
     `Concurrent results: ${successfulOrders.length} succeeded, ${failedOrders.length} failed.`

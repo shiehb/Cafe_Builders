@@ -127,9 +127,10 @@ export async function createOrder(input: CreateOrderInput): Promise<OrderDto> {
   }
 
   // Execute entire order creation within an atomic transaction
-  const createdOrder = await db.$transaction(async (tx) => {
-    // 1. Gather all product IDs and fetch them with allowed groups and options
-    const productIds = Array.from(new Set(input.items.map((it) => it.productId)));
+  const createdOrder = await db.$transaction(
+    async (tx) => {
+      // 1. Gather all product IDs and fetch them with allowed groups and options
+      const productIds = Array.from(new Set(input.items.map((it) => it.productId)));
     const products = await tx.product.findMany({
       where: {
         id: { in: productIds },
@@ -329,6 +330,9 @@ export async function createOrder(input: CreateOrderInput): Promise<OrderDto> {
     });
 
     return order;
+  }, {
+    maxWait: 15000,
+    timeout: 15000,
   });
 
   return mapOrderToDto(createdOrder);

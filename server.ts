@@ -788,14 +788,28 @@ async function processCheckout(body: CheckoutPayload) {
   ].filter(Boolean).join(" • ") || undefined;
 
   // Authoritative creation via orderService (calculates pricing server-side)
-  const createdOrder = await orderService.createOrder({
-    customerName: customerName?.trim() || "Guest",
-    orderType: orderType || "DINE_IN",
-    paymentMethod: paymentMethod === "QRPH" ? "QRPH" : "CASH",
-    notes: orderNotes,
-    serviceFee: 0,
-    items: mappedItems,
-  });
+  let createdOrder;
+  let retries = 0;
+  while (true) {
+    try {
+      createdOrder = await orderService.createOrder({
+        customerName: customerName?.trim() || "Guest",
+        orderType: orderType || "DINE_IN",
+        paymentMethod: paymentMethod === "QRPH" ? "QRPH" : "CASH",
+        notes: orderNotes,
+        serviceFee: 0,
+        items: mappedItems,
+      });
+      break;
+    } catch (err: any) {
+      if (err.code === "P2002" && retries < 5) {
+        retries++;
+        await new Promise((r) => setTimeout(r, Math.random() * 200));
+        continue;
+      }
+      throw err;
+    }
+  }
 
   // Handle CASH paid at counter
   if (paymentMethod === "CASH" && body.paymentStatus === "PAID") {

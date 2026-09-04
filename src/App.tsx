@@ -1,3 +1,5 @@
+"use client";
+"use client";
 import React, { useState, useEffect, useRef } from "react";
 import { Category, Product, ItemCustomization } from "./types";
 import { CATEGORIES, PRODUCTS } from "./data/menuData";

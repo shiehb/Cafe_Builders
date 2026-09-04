@@ -1,3 +1,5 @@
+"use client";
+"use client";
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { CartItem, Product, ItemCustomization, Order, OrderType } from "../types";
 import { PRODUCTS } from "../data/menuData";
