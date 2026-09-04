@@ -30,13 +30,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header
       className={cn(
-        "sticky top-0 z-40 h-14 bg-white/95 backdrop-blur-md transition-all duration-150",
+        "sticky top-0 z-40 bg-white/95 backdrop-blur-md transition-all duration-150 safe-top",
         isCategoryStuck
           ? "border-b border-transparent shadow-none"
           : "border-b border-[#E5E7EB] shadow-xs"
       )}
     >
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 h-full flex items-center justify-between gap-3">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
         {/* Left: Brand Logo + Name ("Artisan Brew & Kitchen") */}
         <div
           className={`flex items-center gap-2.5 shrink-0 transition-opacity duration-200 ${

@@ -20,7 +20,6 @@ export const HomeBottomNavigation: React.FC<HomeBottomNavigationProps> = ({
   const [bounce, setBounce] = useState<boolean>(false);
   const prevCountRef = useRef<number>(cartCount);
 
-  // Trigger brief bounce animation when an item is added to cart
   useEffect(() => {
     if (cartCount > prevCountRef.current) {
       setBounce(true);
@@ -31,9 +30,9 @@ export const HomeBottomNavigation: React.FC<HomeBottomNavigationProps> = ({
   }, [cartCount]);
 
   return (
-    <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-[#E5E7EB] shadow-footer h-16 flex items-center animate-in fade-in duration-200">
-      <div className="max-w-md mx-auto w-full h-full flex items-center px-4 gap-3">
-        {/* Ticket Button: Order ticket number */}
+    <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-[#E5E7EB] shadow-footer flex items-center animate-in fade-in duration-200 safe-bottom">
+      <div className="max-w-3xl w-full mx-auto px-4 sm:px-6 h-16 flex items-center gap-3">
+        {/* Ticket Button */}
         <button
           type="button"
           onClick={onOpenTicket}
@@ -46,7 +45,7 @@ export const HomeBottomNavigation: React.FC<HomeBottomNavigationProps> = ({
           </span>
         </button>
 
-        {/* Cart Button: Positioned inside the footer on the right */}
+        {/* Cart Button */}
         <button
           type="button"
           onClick={onOpenCart}
@@ -58,7 +57,6 @@ export const HomeBottomNavigation: React.FC<HomeBottomNavigationProps> = ({
         >
           <ShoppingBag className="h-5 w-5 text-white" />
 
-          {/* Cart item count badge */}
           {cartCount > 0 && (
             <span className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[10px] font-bold px-1 rounded-full min-w-[18px] h-[18px] flex items-center justify-center border-2 border-white shadow-xs animate-in zoom-in-50">
               {cartCount}
@@ -69,4 +67,3 @@ export const HomeBottomNavigation: React.FC<HomeBottomNavigationProps> = ({
     </div>
   );
 };
-

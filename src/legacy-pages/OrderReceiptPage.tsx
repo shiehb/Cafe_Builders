@@ -172,10 +172,10 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
   const StatusIcon = statusInfo.icon;
 
   return (
-    <div className="min-h-screen bg-[#F7F9FA] text-[#1F2937] flex flex-col font-sans pb-28">
+    <div className="min-h-screen bg-[#F7F9FA] text-[#1F2937] flex flex-col font-sans">
       {/* 1. TOP BAR: Back button navigation only (NO share icon, NO favorite icon) */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#E5E7EB] shadow-xs">
-        <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#E5E7EB] shadow-xs safe-top">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <button
             type="button"
             onClick={() => navigate("/")}
@@ -195,7 +195,7 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
       </header>
 
       {/* 2. MAIN CONTENT */}
-      <main className="max-w-2xl w-full mx-auto px-4 py-5 space-y-4">
+      <main className="max-w-3xl w-full mx-auto px-4 sm:px-6 py-5 space-y-4 flex-1 pb-4">
         {/* STATUS HEADER: Big bold status text + Status Badge with subtle background tint */}
         <div className="text-center space-y-2 py-2">
           {/* Status Badge with subtle background tint: status/badge-bg (#FEF3C7) and status/badge-text (#92400E) */}
@@ -439,9 +439,9 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
         </div>
       </main>
 
-      {/* 3. BOTTOM ACTION: Button ("Back to Menu" or "Track New Order") */}
-      <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-[#E5E7EB] p-3 sm:p-4 shadow-footer">
-        <div className="max-w-2xl mx-auto">
+      {/* 3. BOTTOM ACTION: Button with safe area insets */}
+      <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-[#E5E7EB] shadow-footer safe-bottom-fixed">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3">
           <button
             type="button"
             onClick={() => navigate("/")}

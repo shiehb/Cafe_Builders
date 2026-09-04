@@ -1,5 +1,4 @@
 "use client";
-"use client";
 import React, { useState, useEffect, useRef } from "react";
 import { Category, Product, ItemCustomization } from "./types";
 import { CATEGORIES, PRODUCTS } from "./data/menuData";
@@ -78,7 +77,6 @@ function CustomerApp() {
     const handleScroll = () => {
       if (!categorySentinelRef.current) return;
       const rect = categorySentinelRef.current.getBoundingClientRect();
-      // Navbar header is exactly 56px (h-14) high.
       setIsCategoryStuck(rect.top <= 56.5);
     };
 
@@ -87,7 +85,6 @@ function CustomerApp() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [selectedCategory, searchQuery]);
 
-  // Global Realtime listener for live product inventory & availability updates
   useProductInventoryRealtime((updatedProduct: Product) => {
     if (!updatedProduct || !updatedProduct.id) return;
     setProducts((prev) =>
@@ -95,7 +92,6 @@ function CustomerApp() {
     );
   });
 
-  // Fetch live products & categories from server API
   useEffect(() => {
     async function loadData() {
       try {
@@ -117,13 +113,6 @@ function CustomerApp() {
     }
     loadData();
   }, []);
-
-  const getGreeting = () => {
-    const currentHour = new Date().getHours();
-    if (currentHour < 12) return "Good morning, Coffee Lover";
-    if (currentHour < 18) return "Good afternoon, Coffee Lover";
-    return "Good evening, Coffee Lover";
-  };
 
   const filteredProducts = products.filter((item) => {
     const matchesCategory =
@@ -161,72 +150,72 @@ function CustomerApp() {
 
   return (
     <div className="min-h-screen bg-[#F7F9FA] text-[#1F2937] flex flex-col font-sans pb-24">
-      {/* Top Header: Left Brand Logo + Name, Right Expanding Search Icon */}
+      {/* Top Header */}
       <Navbar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         isCategoryStuck={isCategoryStuck}
       />
 
-      {/* Top Carousel Sections: Hero Banner & Popular Items (Visible on "All" view) */}
-      {selectedCategory === "all" && !searchQuery && (
-        <div className="max-w-3xl w-full mx-auto px-0 sm:px-4 pt-3 pb-3 space-y-5">
-          {/* Section 1: Hero Banner Carousel displaying "New & Seasonal Products" */}
-          <SeasonalHeroCarousel
-            products={products}
-            onSelectProduct={(p) => navigate(`/item/${p.id}`)}
-          />
-
-          {/* Section 2: "Popular" horizontal card scroll */}
-          <MostPopularCarousel
-            products={products}
-            onSelectProduct={(p) => navigate(`/item/${p.id}`)}
-            onQuickAdd={handleQuickAdd}
-          />
-        </div>
-      )}
-
-      {/* Sentinel to accurately detect when Category bar touches the header */}
-      <div ref={categorySentinelRef} className="h-0 w-full pointer-events-none" />
-
-      {/* Category Bar: Positioned on top of All Items, sticks seamlessly under heading on scroll */}
-      <div
-        className={cn(
-          "sticky z-30 w-full bg-white/95 backdrop-blur-md py-2.5 transition-all duration-150",
-          isCategoryStuck
-            ? "top-[55px] border-t-0 border-b border-[#E5E7EB] shadow-xs"
-            : "top-14 border-y border-[#E5E7EB]/80"
+      {/* Content wrapper - NO horizontal padding on mobile for carousels */}
+      <div className="max-w-3xl w-full mx-auto flex-1">
+        {/* Top Carousel Sections: Hero Banner & Popular Items */}
+        {selectedCategory === "all" && !searchQuery && (
+          <div className="space-y-5">
+            <SeasonalHeroCarousel
+              products={products}
+              onSelectProduct={(p) => navigate(`/item/${p.id}`)}
+            />
+            <MostPopularCarousel
+              products={products}
+              onSelectProduct={(p) => navigate(`/item/${p.id}`)}
+              onQuickAdd={handleQuickAdd}
+            />
+          </div>
         )}
-      >
-        <div className="max-w-3xl mx-auto px-4 sm:px-6">
-          <CategoryNav
-            categories={categories}
-            selectedCategoryId={selectedCategory}
-            onSelectCategory={(id) => {
-              setSelectedCategory(id);
-              if (isCategoryStuck || id !== "all") {
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }
-            }}
-          />
+
+        {/* Sentinel for sticky detection */}
+        <div ref={categorySentinelRef} className="h-0 w-full pointer-events-none" />
+
+        {/* Category Bar - Full width with padding only on the bar itself */}
+        <div
+          className={cn(
+            "sticky z-30 bg-white/95 backdrop-blur-md py-2.5 transition-all duration-150",
+            isCategoryStuck
+              ? "top-[55px] border-t-0 border-b border-[#E5E7EB] shadow-xs"
+              : "top-14 border-y border-[#E5E7EB]/80"
+          )}
+        >
+          <div className="max-w-3xl mx-auto px-4 sm:px-6">
+            <CategoryNav
+              categories={categories}
+              selectedCategoryId={selectedCategory}
+              onSelectCategory={(id) => {
+                setSelectedCategory(id);
+                if (isCategoryStuck || id !== "all") {
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }
+              }}
+            />
+          </div>
+        </div>
+
+        {/* All Items Section - with padding */}
+        <div className="px-4 sm:px-6 py-3">
+          <div id="all-items-section">
+            <SpecialtySection
+              title={selectedCategory === "all" ? "All Items" : sectionTitle}
+              products={filteredProducts}
+              onSelectProduct={(p) => navigate(`/item/${p.id}`)}
+              onQuickAdd={handleQuickAdd}
+              isGrid={isGridView}
+              onToggleViewMode={() => setIsGridView((prev) => !prev)}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Main Scrollable Content: All Items */}
-      <main className="max-w-3xl w-full mx-auto px-0 sm:px-4 py-3">
-        <div id="all-items-section">
-          <SpecialtySection
-            title={selectedCategory === "all" ? "All Items" : sectionTitle}
-            products={filteredProducts}
-            onSelectProduct={(p) => navigate(`/item/${p.id}`)}
-            onQuickAdd={handleQuickAdd}
-            isGrid={isGridView}
-            onToggleViewMode={() => setIsGridView((prev) => !prev)}
-          />
-        </div>
-      </main>
-
-      {/* Fixed Bottom Navigation Footer: 100% width distribution / sticky green bar */}
+      {/* Fixed Bottom Navigation Footer with safe area insets */}
       <HomeBottomNavigation
         cartCount={cartItemCount}
         cartTotal={cartTotal}

@@ -37,8 +37,19 @@ interface EditCartItemPageProps {
 
 export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }) => {
   const { cart, updateCartItem } = useCart();
+  const [isScrolled, setIsScrolled] = useState<boolean>(false);
 
-  // CartContext owns browser storage hydration; keep this route render-pure.
+  // Scroll listener: Header shows product name when scrolled past hero
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 250);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const effectiveCart = useMemo(() => cart, [cart]);
 
   const cleanTargetId = decodeURIComponent(cartItemId || "").trim();
@@ -187,63 +198,97 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
   };
 
   return (
-    <div className="min-h-screen bg-[#F7F9FA] text-[#1F2937] flex flex-col font-sans pb-28">
-      {/* 1. TOP BAR */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#E5E7EB] shadow-xs">
-        <div className="max-w-md md:max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => navigate("/cart")}
-            aria-label="Back to Cart"
-            title="Back to Cart"
-            className="h-10 w-10 rounded-full text-[#1F2937] hover:bg-[#F3F4F6] flex items-center justify-center transition-colors cursor-pointer -ml-2"
-          >
-            <ChevronLeft className="h-6 w-6" />
-          </button>
+    <div className="min-h-screen bg-[#F7F9FA] text-[#1F2937] flex flex-col font-sans">
+      {/* 1. UNCOVERABLE FLOATING BACK BUTTON */}
+      <button
+        type="button"
+        onClick={() => navigate("/cart")}
+        aria-label="Back to Cart"
+        title="Back to Cart"
+        className={`fixed top-2.5 left-4 z-50 h-10 w-10 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer ${
+          isScrolled
+            ? "bg-transparent text-[#1F2937] hover:bg-black/5 shadow-none"
+            : "bg-white/90 text-[#1F2937] hover:bg-white shadow-md backdrop-blur-md"
+        }`}
+      >
+        <ChevronLeft className="h-6 w-6" />
+      </button>
 
-          <span className="font-bold text-[15px] leading-[20px] text-[#1F2937]">
-            Edit Customization
-          </span>
-
+      {/* 2. STICKY HEADER */}
+      <header
+        className={`fixed top-0 left-0 right-0 z-30 transition-all duration-300 safe-top ${
+          isScrolled
+            ? "bg-white/95 backdrop-blur-md border-b border-[#E5E7EB] shadow-xs translate-y-0"
+            : "bg-transparent border-b border-transparent -translate-y-full"
+        }`}
+      >
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+          <div className="w-10" />
+          <div className="flex-1 mx-3 text-center">
+            <h1 className="font-bold text-[16px] leading-[22px] text-[#1F2937] truncate">
+              {product.name}
+            </h1>
+          </div>
           <div className="w-10" />
         </div>
       </header>
 
-      {/* 2. MEDIA SECTION & DETAILS */}
-      <main className="max-w-md md:max-w-2xl w-full mx-auto px-4 py-4 space-y-4">
-        {/* Product Card */}
-        <div className="bg-white rounded-2xl overflow-hidden border border-[#E5E7EB] shadow-xs">
-          <div className="relative aspect-video w-full bg-stone-100 overflow-hidden">
-            <img
-              src={product.imageUrl}
-              alt={product.name}
-              className="w-full h-full object-cover"
-            />
-          </div>
-
-          <div className="p-4 sm:p-5 space-y-2">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h1 className="text-[18px] sm:text-[20px] font-bold text-[#1F2937] leading-tight">
-                  {product.name}
-                </h1>
-                <p className="text-[12px] text-[#6B7280] mt-0.5">
-                  Update item customization in your cart
-                </p>
-              </div>
-              <span className="text-[18px] font-bold text-[#00A86B] shrink-0">
-                {formatPrice(product.price)}
-              </span>
-            </div>
-          </div>
+      {/* 3. MEDIA & CUSTOMIZATION FORM */}
+      <main className="max-w-3xl w-full mx-auto pb-32 flex-1">
+        {/* Hero Product Image */}
+        <div className="relative w-full aspect-[4/3] sm:aspect-video bg-stone-100 overflow-hidden">
+          <img
+            src={product.imageUrl}
+            alt={product.name}
+            className="w-full h-full object-cover"
+          />
         </div>
 
-        {/* CUSTOMIZATION OPTIONS */}
-        <div className="bg-white rounded-2xl p-5 border border-[#E5E7EB] shadow-xs space-y-5">
+        {/* Content Card */}
+        <div className="-mt-6 relative z-10 bg-white border-t border-x border-[#E5E7EB] rounded-t-3xl px-5 pt-5 pb-8 space-y-5">
+          {/* Top Pick Pill & Price */}
+          <div className="flex items-center justify-between gap-3">
+            <span className="px-2.5 py-1 rounded-md bg-amber-100 text-amber-900 text-[11px] font-bold tracking-wide uppercase">
+              {product.topPick ? "TOP PICK" : product.popular ? "POPULAR" : product.categoryName || "SPECIALTY"}
+            </span>
+
+            <span className="text-[22px] font-bold text-[#00A86B]">
+              {formatPrice(product.price)}
+            </span>
+          </div>
+
+          {/* Product Title & Description */}
+          <div className="space-y-1.5">
+            <h1 className="text-[22px] sm:text-[24px] font-bold text-[#1F2937] leading-tight">
+              {product.name}
+            </h1>
+            <p className="text-[13px] text-[#6B7280] leading-[20px]">
+              {product.description || "Handcrafted to perfection with premium artisan ingredients."}
+            </p>
+            {/* Current customization summary */}
+            <div className="mt-1.5 text-[12px] text-[#6B7280] bg-[#F7F9FA] p-2 rounded-xl border border-[#E5E7EB]">
+              <span className="font-medium text-[#1F2937]">Current: </span>
+              {!isFood && (
+                <>
+                  {iceLevel !== "Normal" && `${iceLevel} ice, `}
+                  {sweetness && `${sweetness} sugar, `}
+                  {selectedMilk.label !== "Whole Fresh Milk" && `${selectedMilk.label}, `}
+                </>
+              )}
+              {selectedAddons.length > 0 && `${selectedAddons.length} add-on(s)`}
+              {specialInstructions && `• "${specialInstructions}"`}
+              {!isFood && selectedAddons.length === 0 && !specialInstructions && 
+                iceLevel === "Normal" && sweetness === "50%" && selectedMilk.label === "Whole Fresh Milk" && 
+                "Standard preparation"}
+              {isFood && selectedAddons.length === 0 && !specialInstructions && "Standard preparation"}
+            </div>
+          </div>
+
+          <div className="border-b border-[#E5E7EB]" />
+
+          {/* CUSTOMIZATION OPTIONS */}
           {isFood ? (
-            /* ===== FOOD / PASTRIES OPTIONS ===== */
-            <>
-              {/* Food Add-ons */}
+            <div className="space-y-5">
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
                   <h2 className="text-[15px] font-bold text-[#1F2937]">Add-ons & Extras</h2>
@@ -281,10 +326,20 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
                   })}
                 </div>
               </div>
-            </>
+
+              <div className="space-y-2">
+                <h2 className="text-[15px] font-bold text-[#1F2937]">Special Notes</h2>
+                <textarea
+                  rows={2}
+                  value={specialInstructions}
+                  onChange={(e) => setSpecialInstructions(e.target.value)}
+                  placeholder="e.g. Cut in half, extra crispy, separate packaging..."
+                  className="w-full p-3 rounded-2xl border border-[#E5E7EB] bg-[#F7F9FA] text-[13px] text-[#1F2937] focus:bg-white focus:outline-none focus:border-[#00A86B] transition-all resize-none"
+                />
+              </div>
+            </div>
           ) : (
-            /* ===== BEVERAGE OPTIONS ===== */
-            <>
+            <div className="space-y-5">
               {/* Sugar Level */}
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
@@ -312,36 +367,34 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
                 </div>
               </div>
 
-              {/* Ice Level (only when Iced) */}
-              {true && (
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-[15px] font-bold text-[#1F2937]">Ice Level</h2>
-                    <span className="text-[11px] text-[#6B7280]">Select 1</span>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {ICE_LEVELS.map((opt) => {
-                      const isSelected = iceLevel === opt;
-                      return (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() => setIceLevel(opt)}
-                          className={`h-10 rounded-xl border text-[13px] font-semibold transition-all cursor-pointer flex items-center justify-center ${
-                            isSelected
-                              ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
-                              : "border-[#E5E7EB] bg-[#F7F9FA] text-[#1F2937] hover:bg-stone-100"
-                          }`}
-                        >
-                          {opt}
-                        </button>
-                      );
-                    })}
-                  </div>
+              {/* Ice Level */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-[15px] font-bold text-[#1F2937]">Ice Level</h2>
+                  <span className="text-[11px] text-[#6B7280]">Select 1</span>
                 </div>
-              )}
+                <div className="grid grid-cols-4 gap-2">
+                  {ICE_LEVELS.map((opt) => {
+                    const isSelected = iceLevel === opt;
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => setIceLevel(opt)}
+                        className={`h-10 rounded-xl border text-[13px] font-semibold transition-all cursor-pointer flex items-center justify-center ${
+                          isSelected
+                            ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
+                            : "border-[#E5E7EB] bg-[#F7F9FA] text-[#1F2937] hover:bg-stone-100"
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-              {/* Milk Option */}
+              {/* Milk */}
               {product.milkOptionsAvailable && (
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
@@ -373,7 +426,7 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
                 </div>
               )}
 
-              {/* Beverage Add-ons */}
+              {/* Add-ons */}
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
                   <h2 className="text-[15px] font-bold text-[#1F2937]">Add-ons & Toppings</h2>
@@ -411,27 +464,26 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
                   })}
                 </div>
               </div>
-            </>
-          )}
 
-          {/* Special Instructions */}
-          <div className="space-y-2">
-            <h2 className="text-[15px] font-bold text-[#1F2937]">Special Notes</h2>
-            <textarea
-              rows={2}
-              value={specialInstructions}
-              onChange={(e) => setSpecialInstructions(e.target.value)}
-              placeholder="Special notes or preparation instructions..."
-              className="w-full p-3 rounded-2xl border border-[#E5E7EB] bg-[#F7F9FA] text-[13px] text-[#1F2937] focus:bg-white focus:outline-none focus:border-[#00A86B] transition-all resize-none"
-            />
-          </div>
+              {/* Special Instructions */}
+              <div className="space-y-2">
+                <h2 className="text-[15px] font-bold text-[#1F2937]">Special Notes</h2>
+                <textarea
+                  rows={2}
+                  value={specialInstructions}
+                  onChange={(e) => setSpecialInstructions(e.target.value)}
+                  placeholder="e.g. separate lid, extra straw..."
+                  className="w-full p-3 rounded-2xl border border-[#E5E7EB] bg-[#F7F9FA] text-[13px] text-[#1F2937] focus:bg-white focus:outline-none focus:border-[#00A86B] transition-all resize-none"
+                />
+              </div>
+            </div>
+          )}
         </div>
       </main>
 
-      {/* 3. STICKY BOTTOM BAR */}
-      <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-[#E5E7EB] p-3.5 sm:p-4 shadow-footer">
-        <div className="max-w-md md:max-w-2xl mx-auto flex items-center gap-3">
-          {/* Quantity Stepper */}
+      {/* 4. STICKY BOTTOM BAR */}
+      <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-[#E5E7EB] shadow-footer safe-bottom-fixed">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <div className="flex items-center border border-[#E5E7EB] bg-[#F7F9FA] rounded-full p-1 shrink-0">
             <button
               type="button"
@@ -454,7 +506,6 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
             </button>
           </div>
 
-          {/* Save Changes Button */}
           <button
             type="button"
             onClick={handleUpdate}

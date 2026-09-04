@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Heart, Star, ChevronRight, LayoutGrid, List, Zap, Flame } from "lucide-react";
+import { Plus, Heart, Star, LayoutGrid, List, Zap } from "lucide-react";
 import { Product } from "../types";
 import { formatPrice } from "../lib/utils";
 
@@ -32,7 +32,7 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
 
   if (products.length === 0) {
     return (
-      <div className="bg-white rounded-2xl p-8 text-center border border-stone-200/60 my-4 mx-4 sm:mx-0">
+      <div className="bg-white rounded-2xl p-8 text-center border border-stone-200/60 my-4">
         <p className="text-sm text-stone-500 font-medium">
           No items found matching your filter or search.
         </p>
@@ -43,7 +43,7 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
   return (
     <section className="w-full">
       {/* Section Header */}
-      <div className="flex items-center justify-between px-4 sm:px-0 mb-3">
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <h2 className="text-[16px] font-bold text-[#1F2937] leading-[24px]">
             {title}
@@ -54,7 +54,6 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Layout Toggle (2-Col Grid vs 1-Col List) */}
           {onToggleViewMode && (
             <div className="flex items-center bg-stone-100 p-0.5 rounded-full border border-[#E5E7EB]">
               <button
@@ -88,7 +87,7 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
 
       {/* 2-COLUMN GRID VIEW */}
       {isGrid ? (
-        <div className="grid grid-cols-2 gap-3 px-4 sm:px-0">
+        <div className="grid grid-cols-2 gap-3">
           {products.map((product) => {
             const isFav = favorites[product.id];
             const rating = product.rating || 4.9;
@@ -100,7 +99,6 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
                 onClick={() => onSelectProduct(product)}
                 className="bg-white rounded-2xl border border-stone-200/80 shadow-2xs hover:shadow-md transition-all duration-300 overflow-hidden cursor-pointer flex flex-col justify-between group"
               >
-                {/* Product Top Image Container */}
                 <div className="relative aspect-4/3 w-full bg-stone-100 overflow-hidden">
                   <img
                     src={product.imageUrl}
@@ -109,7 +107,6 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
                     loading="lazy"
                   />
 
-                  {/* Top-Left: Badge */}
                   {(product.popular || product.topPick) && (
                     <div className="absolute top-2 left-2">
                       <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-bold shadow-xs">
@@ -119,7 +116,6 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
                     </div>
                   )}
 
-                  {/* Top-Right: Favorite Heart Button */}
                   <button
                     type="button"
                     onClick={(e) => toggleFavorite(product.id, e)}
@@ -133,7 +129,6 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
                     />
                   </button>
 
-                  {/* Bottom-Left: House Special tag */}
                   {product.houseSpecial && (
                     <div className="absolute bottom-2 left-2">
                       <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-stone-900/80 backdrop-blur-xs text-white text-[9px] font-medium">
@@ -143,14 +138,12 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
                   )}
                 </div>
 
-                {/* Card Content */}
                 <div className="p-3 sm:p-3.5 flex flex-col flex-1 justify-between gap-2">
                   <div>
                     <h3 className="font-bold text-xs sm:text-sm text-stone-900 group-hover:text-[#00A86B] transition-colors line-clamp-1 leading-snug">
                       {product.name}
                     </h3>
 
-                    {/* Rating & Prep Time */}
                     <div className="flex items-center gap-1 mt-1 text-[11px] text-stone-500">
                       <div className="flex items-center gap-0.5 text-amber-500 font-semibold">
                         <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
@@ -161,7 +154,6 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
                     </div>
                   </div>
 
-                  {/* Price & Action Button */}
                   <div className="flex items-center justify-between pt-1 border-t border-stone-100 mt-1">
                     <div>
                       <span className="text-xs sm:text-sm font-extrabold text-stone-900 font-display tracking-tight">
@@ -199,8 +191,8 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
           })}
         </div>
       ) : (
-        /* SINGLE VERTICAL LIST OF HORIZONTAL CARDS: Square thumbnail, Title, Subtitle, Price, Quick Add button */
-        <div className="flex flex-col gap-2.5 px-4 sm:px-0">
+        /* SINGLE VERTICAL LIST */
+        <div className="flex flex-col gap-2.5">
           {products.map((product) => {
             const isFav = favorites[product.id];
 
@@ -210,7 +202,6 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
                 onClick={() => onSelectProduct(product)}
                 className="bg-white rounded-2xl p-3 border border-[#E5E7EB] shadow-card hover:border-emerald-300 transition-all duration-200 flex items-center justify-between gap-3.5 cursor-pointer group"
               >
-                {/* Left Column: Square Image Thumbnail with Heart Overlay */}
                 <div className="relative h-20 w-20 flex-shrink-0 rounded-xl overflow-hidden bg-stone-100">
                   <img
                     src={product.imageUrl}
@@ -219,7 +210,6 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
                     loading="lazy"
                   />
 
-                  {/* Heart Icon Overlay */}
                   <button
                     type="button"
                     onClick={(e) => toggleFavorite(product.id, e)}
@@ -234,7 +224,6 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
                   </button>
                 </div>
 
-                {/* Middle Column: Title, Subtitle, Price */}
                 <div className="flex-1 min-w-0 pr-1">
                   <h3 className="font-semibold text-[14px] leading-[20px] text-[#1F2937] group-hover:text-[#00A86B] transition-colors line-clamp-1">
                     {product.name}
@@ -247,7 +236,6 @@ export const SpecialtySection: React.FC<SpecialtySectionProps> = ({
                   </div>
                 </div>
 
-                {/* Right Side: Circular Dark Green "+" Action Button */}
                 <div className="flex-shrink-0">
                   <button
                     type="button"
