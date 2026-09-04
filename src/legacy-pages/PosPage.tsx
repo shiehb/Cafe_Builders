@@ -24,13 +24,13 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { playOrderChime } from "../lib/audio";
-import { emitLocalOrderEvent } from "../lib/realtime";
+import { emitLocalOrderEvent, useProductInventoryRealtime } from "../lib/realtime";
 import { Badge } from "../components/ui/Badge";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 
 export function PosPage() {
   const [categories] = useState<Category[]>(CATEGORIES);
-  const [products] = useState<Product[]>(PRODUCTS);
+  const [products, setProducts] = useState<Product[]>(PRODUCTS);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -49,13 +49,26 @@ export function PosPage() {
   const [lastChargedOrder, setLastChargedOrder] = useState<Order | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  useEffect(() => {
+    let active = true;
+    fetch("/api/products")
+      .then((res) => res.ok ? res.json() : null)
+      .then((json) => { if (active && Array.isArray(json?.data)) setProducts(json.data); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  useProductInventoryRealtime((updatedProduct: Product) => {
+    setProducts((previous) => previous.map((product) => product.id === updatedProduct.id ? { ...product, ...updatedProduct } : product));
+  });
+
   // Recent Orders Drawer / Modal
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [showRecentDrawer, setShowRecentDrawer] = useState<boolean>(false);
 
   // Filter products by category and search
   const filteredProducts = useMemo(() => {
-    return products.filter((p) => {
+    return [...products].sort((a, b) => Number(b.isAvailable) - Number(a.isAvailable)).filter((p) => {
       const matchCat =
         selectedCategory === "all" ||
         p.categoryId === selectedCategory ||
@@ -80,6 +93,7 @@ export function PosPage() {
 
   // Add Product to Ticket
   const handleAddProduct = (product: Product) => {
+    if (!product.isAvailable) return;
     setTicketItems((prev) => {
       const existingIdx = prev.findIndex((it) => it.productId === product.id);
       if (existingIdx >= 0) {

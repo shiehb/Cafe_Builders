@@ -4,7 +4,7 @@ import cookieParser from "cookie-parser";
 import next from "next";
 import dotenv from "dotenv";
 import { createPayMongoQRPhPayment } from "./src/lib/paymongo";
-import { Order, OrderStatus, CheckoutPayload, Product } from "./src/types";
+import { Category, CustomizationGroupConfig, CustomizationOptionConfig, Order, OrderStatus, CheckoutPayload, Product, Ingredient } from "./src/types";
 import { CATEGORIES, PRODUCTS } from "./src/data/menuData";
 import { broadcastKitchenOrder, broadcastProductUpdate, getSupabaseClient, getSupabaseAdminClient } from "./src/lib/supabase";
 import { getPrismaClient, seedDatabaseIfEmpty } from "./src/lib/prisma";
@@ -39,6 +39,48 @@ app.use(
   })
 );
 
+const ingredientsStore: Map<string, Ingredient> = new Map([
+  ["ingredient_matcha", { id: "ingredient_matcha", name: "Matcha", isAvailable: true, productIds: PRODUCTS.filter((p) => p.categoryId === "cat_matcha").map((p) => p.id) }],
+  ["ingredient_milk", { id: "ingredient_milk", name: "Whole Milk", isAvailable: true, productIds: PRODUCTS.filter((p) => p.milkOptionsAvailable).map((p) => p.id) }],
+  ["ingredient_oat_milk", { id: "ingredient_oat_milk", name: "Oat Milk", isAvailable: true, productIds: ["prod_emerald_mint", "prod_oat_flat_white"] }],
+  ["ingredient_almond_milk", { id: "ingredient_almond_milk", name: "Almond Milk", isAvailable: true, productIds: [] }],
+  ["ingredient_soy_milk", { id: "ingredient_soy_milk", name: "Soy Milk", isAvailable: true, productIds: [] }],
+  ["ingredient_coffee_beans", { id: "ingredient_coffee_beans", name: "Coffee Beans", isAvailable: true, productIds: PRODUCTS.filter((p) => p.categoryId === "cat_coffee").map((p) => p.id) }],
+]);
+const categoriesStore = new Map<string, Category>(CATEGORIES.map((category) => [category.id, { ...category, isActive: true }]));
+const customizationGroupsStore = new Map<string, CustomizationGroupConfig>([
+  ["group_ice", { id: "group_ice", name: "Ice Level", selectionMode: "SINGLE", isActive: true }],
+  ["group_sugar", { id: "group_sugar", name: "Sugar Level", selectionMode: "SINGLE", isActive: true }],
+  ["group_milk", { id: "group_milk", name: "Milk Choices", selectionMode: "SINGLE", isActive: true }],
+  ["group_addons", { id: "group_addons", name: "Add-ons", selectionMode: "MULTIPLE", isActive: true }],
+]);
+const customizationOptionsStore = new Map<string, CustomizationOptionConfig>([
+  ["option_ice_less", { id: "option_ice_less", groupId: "group_ice", name: "Less", priceModifier: 0, isActive: true }],
+  ["option_ice_regular", { id: "option_ice_regular", groupId: "group_ice", name: "Regular", priceModifier: 0, isActive: true }],
+  ["option_ice_extra", { id: "option_ice_extra", groupId: "group_ice", name: "Extra", priceModifier: 0, isActive: true }],
+  ["option_sugar_less", { id: "option_sugar_less", groupId: "group_sugar", name: "Less Sweet", priceModifier: 0, isActive: true }],
+  ["option_sugar_regular", { id: "option_sugar_regular", groupId: "group_sugar", name: "Regular", priceModifier: 0, isActive: true }],
+  ["option_sugar_more", { id: "option_sugar_more", groupId: "group_sugar", name: "More Sweet", priceModifier: 0, isActive: true }],
+  ["option_milk_whole", { id: "option_milk_whole", groupId: "group_milk", name: "Whole Milk", priceModifier: 0, isActive: true }],
+  ["option_milk_oat", { id: "option_milk_oat", groupId: "group_milk", name: "Oat Milk", priceModifier: 25, isActive: true }],
+  ["option_milk_almond", { id: "option_milk_almond", groupId: "group_milk", name: "Almond Milk", priceModifier: 25, isActive: true }],
+  ["option_milk_soy", { id: "option_milk_soy", groupId: "group_milk", name: "Soy Milk", priceModifier: 20, isActive: true }],
+  ["option_addon_shot", { id: "option_addon_shot", groupId: "group_addons", name: "Extra Shot", priceModifier: 30, isActive: true }],
+  ["option_addon_jelly", { id: "option_addon_jelly", groupId: "group_addons", name: "Coffee Jelly", priceModifier: 25, isActive: true }],
+  ["option_addon_vanilla", { id: "option_addon_vanilla", groupId: "group_addons", name: "Vanilla Syrup", priceModifier: 20, isActive: true }],
+]);
+
+function recomputeProductAvailability(product: Product): Product {
+  const linked = (product.ingredientIds || []).map((id) => ingredientsStore.get(id));
+  const ingredientUnavailable = linked.find((ingredient) => ingredient && !ingredient.isAvailable);
+  product.isAvailable = product.manualAvailability !== false && !ingredientUnavailable;
+  return product;
+}
+
+function recomputeAllProductAvailability() {
+  for (const product of productsStore.values()) recomputeProductAvailability(product);
+}
+
 // In-memory database stores with persistence during server lifecycle
 let orderSequence = 1;
 const ordersStore: Map<string, Order> = new Map();
@@ -46,7 +88,14 @@ const orderIdempotencyStore: Map<string, string> = new Map();
 
 // In-memory products store initialized from static catalog
 const productsStore: Map<string, Product> = new Map(
-  PRODUCTS.map((p) => [p.id, { ...p }])
+  PRODUCTS.map((p) => [p.id, {
+    ...p,
+    ingredientIds: p.ingredientIds || [
+      ...(p.categoryId === "cat_matcha" ? ["ingredient_matcha"] : []),
+      ...(p.categoryId === "cat_coffee" ? ["ingredient_coffee_beans"] : []),
+      ...(p.milkOptionsAvailable ? ["ingredient_milk", "ingredient_oat_milk"] : []),
+    ],
+  }])
 );
 
 // SSE Connected clients for instant low-latency real-time updates
@@ -215,7 +264,7 @@ app.post("/api/auth/logout", (_req, res) => {
 
 // Categories API
 app.get("/api/categories", (_req, res) => {
-  res.json({ data: CATEGORIES });
+  res.json({ data: Array.from(categoriesStore.values()).filter((category) => category.isActive && !category.isArchived) });
 });
 
 /**
@@ -250,7 +299,8 @@ app.get("/api/products", async (req, res) => {
     }
   }
 
-  let list = Array.from(productsStore.values());
+  recomputeAllProductAvailability();
+  let list = Array.from(productsStore.values()).filter((p) => !p.isArchived);
 
   if (availableOnly) {
     list = list.filter((p) => p.isAvailable === true);
@@ -270,15 +320,16 @@ app.get("/api/products/:id", (req, res) => {
   if (!product) {
     return res.status(404).json({ error: "Product not found" });
   }
-  res.json({ product });
+  res.json({ product: recomputeProductAvailability(product) });
 });
 
 // Canonical catalog contract consumed by Customer and POS. The current in-memory
 // catalog is normalized here so both clients receive the same availability shape.
 app.get("/api/catalog", (req, res) => {
+    recomputeAllProductAvailability();
   const availableOnly = req.query.availableOnly === "true";
   const data = Array.from(productsStore.values())
-    .filter((product) => !availableOnly || product.isAvailable)
+    .filter((product) => !product.isArchived && (!availableOnly || product.isAvailable))
     .map((product) => ({
       ...product,
       basePrice: product.price,
@@ -324,8 +375,133 @@ app.get("/api/admin/products", async (_req, res) => {
     console.warn("Supabase admin fetch products fallback:", err);
   }
 
+  recomputeAllProductAvailability();
   const list = Array.from(productsStore.values());
   res.json({ data: list });
+});
+
+app.get("/api/admin/ingredients", (_req, res) => {
+  res.json({ data: Array.from(ingredientsStore.values()).map((ingredient) => ({
+    ...ingredient,
+    productIds: Array.from(productsStore.values()).filter((product) => product.ingredientIds?.includes(ingredient.id)).map((product) => product.id),
+  })) });
+});
+
+app.get("/api/admin/categories", (_req, res) => res.json({ data: Array.from(categoriesStore.values()) }));
+app.post("/api/admin/categories", (req, res) => {
+  const name = String(req.body?.name || "").trim();
+  if (!name) return res.status(400).json({ error: "Category name is required" });
+  const id = `cat_${Date.now()}`;
+  const category: Category = { id, name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""), sortOrder: Number.isFinite(Number(req.body?.sortOrder)) ? Number(req.body.sortOrder) : categoriesStore.size, productType: req.body?.productType === "FOOD" ? "FOOD" : "BEVERAGE", isActive: req.body?.isActive !== false };
+  categoriesStore.set(id, category);
+  return res.status(201).json({ success: true, category });
+});
+app.patch("/api/admin/categories/:id", (req, res) => {
+  const category = categoriesStore.get(req.params.id);
+  if (!category) return res.status(404).json({ error: "Category not found" });
+  if (typeof req.body?.name === "string" && req.body.name.trim()) category.name = req.body.name.trim();
+  if (req.body?.productType === "BEVERAGE" || req.body?.productType === "FOOD") category.productType = req.body.productType;
+  if (Number.isFinite(Number(req.body?.sortOrder))) category.sortOrder = Number(req.body.sortOrder);
+  if (typeof req.body?.isArchived === "boolean") category.isArchived = req.body.isArchived;
+  if (typeof req.body?.isActive === "boolean") category.isActive = req.body.isActive;
+  return res.json({ success: true, category });
+});
+app.delete("/api/admin/categories/:id", (req, res) => {
+  const category = categoriesStore.get(req.params.id);
+  if (!category) return res.status(404).json({ error: "Category not found" });
+  category.isArchived = true;
+  category.isActive = false;
+  return res.json({ success: true, category });
+});
+
+app.get("/api/admin/customization-groups", (_req, res) => res.json({ data: Array.from(customizationGroupsStore.values()) }));
+app.post("/api/admin/customization-groups", (req, res) => {
+  const name = String(req.body?.name || "").trim();
+  if (!name) return res.status(400).json({ error: "Customization group name is required" });
+  const id = `group_${Date.now()}`;
+  const group: CustomizationGroupConfig = { id, name, selectionMode: req.body?.selectionMode === "MULTIPLE" ? "MULTIPLE" : "SINGLE", isRequired: req.body?.isRequired === true, sortOrder: Number.isFinite(Number(req.body?.sortOrder)) ? Number(req.body.sortOrder) : customizationGroupsStore.size, isActive: req.body?.isActive !== false };
+  customizationGroupsStore.set(id, group);
+  return res.status(201).json({ success: true, group });
+});
+app.patch("/api/admin/customization-groups/:id", (req, res) => {
+  const group = customizationGroupsStore.get(req.params.id);
+  if (!group) return res.status(404).json({ error: "Customization group not found" });
+  if (typeof req.body?.name === "string" && req.body.name.trim()) group.name = req.body.name.trim();
+  if (req.body?.selectionMode === "SINGLE" || req.body?.selectionMode === "MULTIPLE") group.selectionMode = req.body.selectionMode;
+  if (typeof req.body?.isRequired === "boolean") group.isRequired = req.body.isRequired;
+  if (Number.isFinite(Number(req.body?.sortOrder))) group.sortOrder = Number(req.body.sortOrder);
+  if (typeof req.body?.isArchived === "boolean") group.isArchived = req.body.isArchived;
+  if (typeof req.body?.isActive === "boolean") group.isActive = req.body.isActive;
+  return res.json({ success: true, group });
+});
+app.delete("/api/admin/customization-groups/:id", (req, res) => {
+  const group = customizationGroupsStore.get(req.params.id);
+  if (!group) return res.status(404).json({ error: "Customization group not found" });
+  group.isArchived = true;
+  group.isActive = false;
+  return res.json({ success: true, group });
+});
+
+app.get("/api/admin/customization-options", (_req, res) => res.json({ data: Array.from(customizationOptionsStore.values()) }));
+app.post("/api/admin/customization-options", (req, res) => {
+  const name = String(req.body?.name || "").trim();
+  const groupId = String(req.body?.groupId || "");
+  if (!name || !customizationGroupsStore.has(groupId)) return res.status(400).json({ error: "Option name and group are required" });
+  const id = `option_${Date.now()}`;
+  const option: CustomizationOptionConfig = { id, groupId, name, priceModifier: Number(req.body?.priceModifier) || 0, isActive: true };
+  customizationOptionsStore.set(id, option);
+  return res.status(201).json({ success: true, option });
+});
+app.patch("/api/admin/customization-options/:id", (req, res) => {
+  const option = customizationOptionsStore.get(req.params.id);
+  if (!option) return res.status(404).json({ error: "Customization option not found" });
+  if (typeof req.body?.name === "string" && req.body.name.trim()) option.name = req.body.name.trim();
+  if (typeof req.body?.priceModifier === "number" && req.body.priceModifier >= 0) option.priceModifier = req.body.priceModifier;
+  if (typeof req.body?.isActive === "boolean") option.isActive = req.body.isActive;
+  if (typeof req.body?.isArchived === "boolean") option.isArchived = req.body.isArchived;
+  return res.json({ success: true, option });
+});
+app.delete("/api/admin/customization-options/:id", (req, res) => {
+  const option = customizationOptionsStore.get(req.params.id);
+  if (!option) return res.status(404).json({ error: "Customization option not found" });
+  option.isArchived = true;
+  option.isActive = false;
+  return res.json({ success: true, option });
+});
+
+app.post("/api/admin/ingredients", (req, res) => {
+  const name = String(req.body?.name || "").trim();
+  if (!name) return res.status(400).json({ error: "Ingredient name is required" });
+  const id = `ingredient_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const ingredient: Ingredient = { id, name, isAvailable: req.body?.isAvailable !== false, productIds: [] };
+  ingredientsStore.set(id, ingredient);
+  return res.status(201).json({ success: true, ingredient });
+});
+
+app.patch("/api/admin/ingredients/:id", (req, res) => {
+  const ingredient = ingredientsStore.get(req.params.id);
+  if (!ingredient) return res.status(404).json({ error: "Ingredient not found" });
+  if (typeof req.body?.name === "string" && req.body.name.trim()) ingredient.name = req.body.name.trim();
+  if (typeof req.body?.isAvailable === "boolean") ingredient.isAvailable = req.body.isAvailable;
+  if (typeof req.body?.isArchived === "boolean") ingredient.isArchived = req.body.isArchived;
+  const affectedProducts: string[] = [];
+  recomputeAllProductAvailability();
+  for (const product of productsStore.values()) {
+    if (product.ingredientIds?.includes(ingredient.id)) {
+      affectedProducts.push(product.id);
+      broadcastProductRealtime("product_updated", product);
+    }
+  }
+  return res.json({ success: true, ingredient, affectedProducts, affectedOptions: [] });
+});
+
+app.delete("/api/admin/ingredients/:id", (req, res) => {
+  const ingredient = ingredientsStore.get(req.params.id);
+  if (!ingredient) return res.status(404).json({ error: "Ingredient not found" });
+  ingredient.isArchived = true;
+  ingredient.isAvailable = false;
+  recomputeAllProductAvailability();
+  return res.json({ success: true, ingredient });
 });
 
 /**
@@ -337,7 +513,9 @@ app.post("/api/admin/products", async (req, res) => {
     const {
       name,
       categoryId,
+      categoryIds = [],
       categoryName,
+      productType,
       price,
       description = "",
       imageUrl,
@@ -347,7 +525,10 @@ app.post("/api/admin/products", async (req, res) => {
       enabledCustomizationGroups,
       milkOptions,
       addonOptions,
+      allowedOptionIds,
       tags = [],
+      ingredientIds = [],
+      isArchived = false,
     } = req.body || {};
 
     if (!name || typeof name !== "string" || !name.trim()) {
@@ -366,17 +547,23 @@ app.post("/api/admin/products", async (req, res) => {
       id: newId,
       name: name.trim(),
       categoryId: categoryId || (matchedCategory ? matchedCategory.id : "cat_coffee"),
+      categoryIds: Array.isArray(categoryIds) && categoryIds.length ? categoryIds : [categoryId || (matchedCategory ? matchedCategory.id : "cat_coffee")],
       categoryName: categoryName || (matchedCategory ? matchedCategory.name : "Artisan Coffee"),
+      productType: productType === "FOOD" ? "FOOD" : "BEVERAGE",
       price: numericPrice,
       description: description?.trim() || "",
       imageUrl: imageUrl?.trim() || "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=600&auto=format&fit=crop&q=80",
       popular: Boolean(popular),
       isAvailable: isAvailable !== false,
+      manualAvailability: isAvailable !== false,
       sweetnessAdjustable: sweetnessAdjustable !== false,
       enabledCustomizationGroups: Array.isArray(enabledCustomizationGroups) ? enabledCustomizationGroups : undefined,
       milkOptions: Array.isArray(milkOptions) ? milkOptions : undefined,
       addonOptions: Array.isArray(addonOptions) ? addonOptions : undefined,
+      allowedOptionIds: Array.isArray(allowedOptionIds) ? allowedOptionIds.filter((id: unknown) => customizationOptionsStore.has(String(id))) : [],
       tags: Array.isArray(tags) ? tags : ["Handcrafted", "Featured"],
+      ingredientIds: Array.isArray(ingredientIds) ? ingredientIds.filter((id: unknown) => ingredientsStore.has(String(id))) : [],
+      isArchived: Boolean(isArchived),
     };
 
     productsStore.set(newId, newProduct);
@@ -467,7 +654,7 @@ app.patch("/api/admin/products/:id", async (req, res) => {
 
   // Apply updates
   if (typeof updates.isAvailable === "boolean") {
-    product.isAvailable = updates.isAvailable;
+    product.manualAvailability = updates.isAvailable;
   }
   if (typeof updates.price === "number" && !isNaN(updates.price) && updates.price >= 0) {
     product.price = updates.price;
@@ -481,6 +668,12 @@ app.patch("/api/admin/products/:id", async (req, res) => {
   if (typeof updates.name === "string" && updates.name.trim()) {
     product.name = updates.name.trim();
   }
+  if (updates.productType === "BEVERAGE" || updates.productType === "FOOD") product.productType = updates.productType;
+  if (Array.isArray(updates.categoryIds) && updates.categoryIds.length) {
+    product.categoryIds = updates.categoryIds;
+    product.categoryId = String(updates.categoryIds[0]);
+    product.categoryName = categoriesStore.get(product.categoryId)?.name || product.categoryName;
+  }
   if (Array.isArray(updates.enabledCustomizationGroups)) {
     product.enabledCustomizationGroups = updates.enabledCustomizationGroups.filter(
       (group: unknown) => ["ice", "sugar", "milk", "addons"].includes(String(group))
@@ -488,7 +681,13 @@ app.patch("/api/admin/products/:id", async (req, res) => {
   }
   if (Array.isArray(updates.milkOptions)) product.milkOptions = updates.milkOptions;
   if (Array.isArray(updates.addonOptions)) product.addonOptions = updates.addonOptions;
+  if (Array.isArray(updates.allowedOptionIds)) product.allowedOptionIds = updates.allowedOptionIds.map(String);
+  if (Array.isArray(updates.ingredientIds)) {
+    product.ingredientIds = updates.ingredientIds.filter((ingredientId: unknown) => ingredientsStore.has(String(ingredientId)));
+  }
+  if (typeof updates.isArchived === "boolean") product.isArchived = updates.isArchived;
 
+  recomputeProductAvailability(product);
   productsStore.set(id, product);
 
   // Sync to Supabase table using Service Role key (RLS bypass on authenticated server)
@@ -901,13 +1100,6 @@ const handleSimulateWebhook = (req: any, res: Response) => {
 app.post("/api/webhooks/paymongo/simulate", handleSimulateWebhook);
 app.post("/api/simulate-webhook", handleSimulateWebhook);
 app.post("/api/simulate/webhook-payment", handleSimulateWebhook);
-
-// Express fallback for unmatched /api/* routes: Always return JSON 404 instead of HTML
-app.all("/api/*", (req, res) => {
-  res.status(404).json({
-    error: `API route ${req.method} ${req.path} not found.`,
-  });
-});
 
 async function startServer() {
   const nextApp = next({ dev: process.env.NODE_ENV !== "production" });

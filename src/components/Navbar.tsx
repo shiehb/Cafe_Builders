@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Search, X } from "lucide-react";
+import { Coffee, Search, X } from "lucide-react";
 import { cn } from "../lib/utils";
 
 interface NavbarProps {
@@ -44,7 +44,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           }`}
         >
           <div className="h-8 w-8 rounded-full bg-[#00A86B] flex items-center justify-center text-white shadow-xs font-bold text-sm">
-            ☕
+            <Coffee className="h-4 w-4" />
           </div>
           <span className="font-bold text-[16px] leading-[24px] tracking-tight text-[#1F2937]">
             Artisan Brew & Kitchen

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { ArrowLeft, Plus, Image as ImageIcon, Flame, Check, AlertCircle, RefreshCw } from "lucide-react";
 import { CATEGORIES } from "../data/menuData";
+import { Ingredient } from "../types";
 import { formatPrice } from "../lib/utils";
 import { navigate } from "../lib/router";
 import { StaffGuard } from "../components/staff/StaffGuard";
@@ -37,10 +38,19 @@ const AdminProductNewContent: React.FC = () => {
   const [imageUrl, setImageUrl] = useState<string>(PRESET_IMAGES[0].url);
   const [popular, setPopular] = useState<boolean>(false);
   const [sweetnessAdjustable, setSweetnessAdjustable] = useState<boolean>(true);
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [ingredientIds, setIngredientIds] = useState<string[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState<boolean>(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  React.useEffect(() => {
+    fetch("/api/admin/ingredients", { credentials: "include" })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => setIngredients(Array.isArray(data?.data) ? data.data : []))
+      .catch(() => undefined);
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,6 +83,7 @@ const AdminProductNewContent: React.FC = () => {
           popular,
           isAvailable: true,
           sweetnessAdjustable,
+          ingredientIds,
         }),
       });
 
@@ -291,6 +302,21 @@ const AdminProductNewContent: React.FC = () => {
                 onChange={(e) => setSweetnessAdjustable(e.target.checked)}
                 className="h-5 w-5 rounded accent-[#00A86B] cursor-pointer"
               />
+            </div>
+          </div>
+
+          <div className="bg-stone-900 border border-stone-800 rounded-3xl p-5 space-y-3">
+            <div>
+              <h2 className="text-xs font-black uppercase text-stone-400 tracking-wider">Required Ingredients</h2>
+              <p className="text-[10px] text-stone-500 mt-1">Products become unavailable when a linked ingredient is out of stock.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {ingredients.filter((ingredient) => !ingredient.isArchived).map((ingredient) => (
+                <label key={ingredient.id} className="min-h-11 px-3 rounded-xl bg-stone-950 border border-stone-800 flex items-center gap-2 text-xs font-bold text-stone-200 cursor-pointer">
+                  <input type="checkbox" checked={ingredientIds.includes(ingredient.id)} onChange={(event) => setIngredientIds((previous) => event.target.checked ? [...previous, ingredient.id] : previous.filter((id) => id !== ingredient.id))} className="h-4 w-4 accent-[#00A86B]" />
+                  {ingredient.name}
+                </label>
+              ))}
             </div>
           </div>
 

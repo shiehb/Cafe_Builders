@@ -23,12 +23,9 @@ export function navigate(path: string, options?: { replace?: boolean }) {
 }
 
 export function usePath(): string {
-  const [currentPath, setCurrentPath] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return window.location.pathname || "/";
-    }
-    return "/";
-  });
+  // Keep SSR and the first client render deterministic. The browser path is
+  // read after mount, then the route transitions without a hydration mismatch.
+  const [currentPath, setCurrentPath] = useState<string>("/");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -38,6 +35,7 @@ export function usePath(): string {
       setCurrentPath(cleanPath);
     };
 
+    handleLocationChange();
     window.addEventListener("popstate", handleLocationChange);
     window.addEventListener(NAVIGATE_EVENT, handleLocationChange);
 

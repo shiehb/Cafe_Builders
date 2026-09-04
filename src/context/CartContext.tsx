@@ -50,100 +50,59 @@ const getCustomizationSig = (prodId: string, cust: ItemCustomization) => {
 };
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // 1. Cart state with ID sanitization & robust product resolution
-  const [cart, setCart] = useState<CartItem[]>(() => {
-    try {
-      const stored =
-        localStorage.getItem(LOCAL_STORAGE_CART_KEY) ||
-        localStorage.getItem("cafe_customer_cart") ||
-        localStorage.getItem("cafe_cart");
-      if (!stored) {
-        const p1 = PRODUCTS.find((p) => p.id === "prod_emerald_mint") || PRODUCTS[0];
-        const p2 = PRODUCTS.find((p) => p.id === "prod_pistachio_croissant") || PRODUCTS[1];
-        return [
-          {
-            id: "ci_emerald_mint",
-            productId: p1.id,
-            product: p1,
-            quantity: 1,
-            unitPrice: 5.45,
-            customizations: {
-              size: "Medium",
-              sweetness: "50% Sugar",
-              iceLevel: "Normal Ice",
-            },
-            customizationsTotal: 0,
-            lineTotal: 5.45,
-          },
-          {
-            id: "ci_pistachio_croissant",
-            productId: p2.id,
-            product: p2,
-            quantity: 2,
-            unitPrice: 4.80,
-            customizations: {
-              servingPreference: "Warmed Up",
-              addOns: ["Premium glaze spread"],
-            },
-            customizationsTotal: 0,
-            lineTotal: 9.60,
-          },
-        ];
-      }
-      const parsed = JSON.parse(stored);
-      if (!Array.isArray(parsed)) return [];
-      return parsed.map((item, idx) => {
-        const product =
-          item.product ||
-          PRODUCTS.find((p) => p.id === item.productId) || {
-            id: item.productId || `prod_${idx}`,
-            name: item.name || "Handcrafted Beverage",
-            price: item.unitPrice || 0,
-            description: "",
-            imageUrl: "https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&q=80&w=600",
-            categoryId: "all",
-            isAvailable: true,
-          };
-
-        const id = item.id ? String(item.id).trim() : generateCartItemId(`item_${idx}`);
-
-        return {
-          ...item,
-          id,
-          productId: product.id || item.productId,
-          product,
-        };
-      });
-    } catch {
-      return [];
-    }
-  });
+  // Browser storage is hydrated after the first render so SSR and the first client render match.
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [isStorageHydrated, setIsStorageHydrated] = useState(false);
 
   // 2. Order Type state
-  const [orderType, setOrderTypeState] = useState<OrderType>(() => {
-    try {
-      return (localStorage.getItem(LOCAL_STORAGE_ORDER_TYPE_KEY) as OrderType) || "DINE_IN";
-    } catch {
-      return "DINE_IN";
-    }
-  });
+  const [orderType, setOrderTypeState] = useState<OrderType>("DINE_IN");
 
   const setOrderType = (type: OrderType) => {
     setOrderTypeState(type);
-    try {
-      localStorage.setItem(LOCAL_STORAGE_ORDER_TYPE_KEY, type);
-    } catch {}
   };
 
   // 3. Saved orders
-  const [savedOrders, setSavedOrders] = useState<Order[]>(() => {
+  const [savedOrders, setSavedOrders] = useState<Order[]>([]);
+
+  useEffect(() => {
     try {
-      const stored = localStorage.getItem(LOCAL_STORAGE_ORDERS_KEY);
-      return stored ? JSON.parse(stored) : [];
+      const storedCart =
+        localStorage.getItem(LOCAL_STORAGE_CART_KEY) ||
+        localStorage.getItem("cafe_customer_cart") ||
+        localStorage.getItem("cafe_cart");
+
+      if (storedCart) {
+        const parsed = JSON.parse(storedCart);
+        if (Array.isArray(parsed)) {
+          setCart(parsed.map((item, idx) => {
+            const product = item.product || PRODUCTS.find((p) => p.id === item.productId) || {
+              id: item.productId || `prod_${idx}`,
+              name: item.name || "Handcrafted Beverage",
+              price: item.unitPrice || 0,
+              description: "",
+              imageUrl: "https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&q=80&w=600",
+              categoryId: "all",
+              isAvailable: true,
+            };
+            return { ...item, id: item.id ? String(item.id).trim() : generateCartItemId(`item_${idx}`), productId: product.id, product };
+          }));
+        }
+      }
+
+      const storedOrderType = localStorage.getItem(LOCAL_STORAGE_ORDER_TYPE_KEY) as OrderType | null;
+      if (storedOrderType === "DINE_IN" || storedOrderType === "TAKEAWAY") setOrderTypeState(storedOrderType);
+
+      const storedOrders = localStorage.getItem(LOCAL_STORAGE_ORDERS_KEY);
+      if (storedOrders) {
+        const parsedOrders = JSON.parse(storedOrders);
+        if (Array.isArray(parsedOrders)) setSavedOrders(parsedOrders);
+      }
     } catch {
-      return [];
+      // Use empty in-memory defaults when browser storage is unavailable or malformed.
+    } finally {
+      setIsStorageHydrated(true);
     }
-  });
+  }, []);
 
   // Notifications suppressed per user request
   const showToast = useCallback((_message: string, _type: "success" | "error" | "info" = "success") => {
@@ -152,22 +111,34 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Persist cart to localStorage
   useEffect(() => {
+    if (!isStorageHydrated) return;
     try {
       localStorage.setItem(LOCAL_STORAGE_CART_KEY, JSON.stringify(cart));
     } catch (e) {
       console.error("Failed to save cart to localStorage", e);
     }
-  }, [cart]);
+  }, [cart, isStorageHydrated]);
+
+  useEffect(() => {
+    if (!isStorageHydrated) return;
+    try {
+      localStorage.setItem(LOCAL_STORAGE_ORDER_TYPE_KEY, orderType);
+    } catch {}
+  }, [orderType, isStorageHydrated]);
 
   // Persist orders to localStorage
   const persistOrders = useCallback((orders: Order[]) => {
     setSavedOrders(orders);
+  }, []);
+
+  useEffect(() => {
+    if (!isStorageHydrated) return;
     try {
-      localStorage.setItem(LOCAL_STORAGE_ORDERS_KEY, JSON.stringify(orders));
+      localStorage.setItem(LOCAL_STORAGE_ORDERS_KEY, JSON.stringify(savedOrders));
     } catch (e) {
       console.error("Failed to save orders to localStorage", e);
     }
-  }, []);
+  }, [savedOrders, isStorageHydrated]);
 
   const cartTotal = cart.reduce((sum, item) => sum + item.lineTotal, 0);
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);

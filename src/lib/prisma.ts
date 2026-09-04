@@ -72,7 +72,7 @@ export async function seedDatabaseIfEmpty(): Promise<boolean> {
             name: cat.name,
             slug: cat.slug,
             description: `${cat.name} handcrafted artisan menu`,
-            icon: cat.iconEmoji || "☕",
+            icon: cat.iconName || "coffee",
             sortOrder: cat.sortOrder,
           },
         });

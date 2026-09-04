@@ -23,11 +23,6 @@ const BEVERAGE_ADDONS = [
   { label: "Vanilla Bean Syrup", price: 20 },
 ];
 
-const FOOD_WARMING_OPTIONS = [
-  { label: "Warmed Up", description: "Freshly heated & served warm", icon: "♨️" },
-  { label: "Room Temp", description: "Served fresh as is", icon: "🥐" },
-];
-
 const FOOD_ADDONS = [
   { label: "Extra Whipped Butter", price: 20 },
   { label: "Artisan Honey Drizzle", price: 20 },
@@ -81,7 +76,6 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
   const [quantity, setQuantity] = useState<number>(1);
   const [iceLevel, setIceLevel] = useState<string>("Normal");
   const [sweetness, setSweetness] = useState<string>("50%");
-  const [foodWarming, setFoodWarming] = useState<string>("Warmed Up");
   const [selectedMilk, setSelectedMilk] = useState(MILK_OPTIONS[0]);
   const [selectedAddons, setSelectedAddons] = useState<{ label: string; price: number }[]>([]);
   const [specialInstructions, setSpecialInstructions] = useState<string>("");
@@ -184,7 +178,6 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
 
     const customizations: ItemCustomization = isFood
       ? {
-          servingPreference: foodWarming,
           addOns: hasGroup("addons") ? selectedAddons.map((a) => `${a.label} (+${formatPrice(a.price)})`) : [],
           specialInstructions: specialInstructions.trim() || undefined,
         }
@@ -300,40 +293,6 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
           ) : isFood ? (
             /* ===== FOOD / PASTRIES OPTIONS (Drink options hidden) ===== */
             <div className="space-y-5">
-              {/* Serving / Warming Preference */}
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-[15px] font-bold text-[#1F2937]">Serving Preference</h2>
-                  <span className="text-[11px] text-[#6B7280]">Select 1</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2.5">
-                  {FOOD_WARMING_OPTIONS.map((opt) => {
-                    const isSelected = foodWarming === opt.label;
-                    return (
-                      <button
-                        key={opt.label}
-                        type="button"
-                        onClick={() => setFoodWarming(opt.label)}
-                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
-                          isSelected
-                            ? "border-[#00A86B] bg-[#E6F6F0]"
-                            : "border-[#E5E7EB] bg-[#F7F9FA] hover:bg-stone-100"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className={`text-[13px] font-bold flex items-center gap-1.5 ${isSelected ? "text-[#00A86B]" : "text-[#1F2937]"}`}>
-                            <span>{opt.icon}</span>
-                            <span>{opt.label}</span>
-                          </span>
-                          {isSelected && <Check className="h-4 w-4 text-[#00A86B]" />}
-                        </div>
-                        <p className="text-[11px] text-[#6B7280]">{opt.description}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
               {/* Food Add-ons */}
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
@@ -522,7 +481,7 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
                   rows={2}
                   value={specialInstructions}
                   onChange={(e) => setSpecialInstructions(e.target.value)}
-                  placeholder="e.g. Extra hot, separate lid, extra straw..."
+                  placeholder="e.g. separate lid, extra straw..."
                   className="w-full p-3 rounded-2xl border border-[#E5E7EB] bg-[#F7F9FA] text-[13px] text-[#1F2937] focus:bg-white focus:outline-none focus:border-[#00A86B] transition-all resize-none"
                 />
               </div>

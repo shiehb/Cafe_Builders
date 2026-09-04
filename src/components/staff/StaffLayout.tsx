@@ -12,6 +12,7 @@ export interface StaffLayoutProps {
   onToggleSound?: () => void;
   activeOrderCount?: number;
   headerRight?: React.ReactNode;
+  hideRoleNav?: boolean;
   children: React.ReactNode;
 }
 
@@ -24,6 +25,7 @@ export const StaffLayout: React.FC<StaffLayoutProps> = ({
   onToggleSound,
   activeOrderCount = 0,
   headerRight,
+  hideRoleNav = false,
   children,
 }) => {
   const [livePulse, setLivePulse] = useState<boolean>(true);
@@ -61,7 +63,7 @@ export const StaffLayout: React.FC<StaffLayoutProps> = ({
           </div>
 
           {/* Center: Quick Navigation Tabs */}
-          <nav className="flex items-center bg-[#F7F9FA] p-1 rounded-xl border border-[#E5E7EB]">
+          {!hideRoleNav && <nav className="flex items-center bg-[#F7F9FA] p-1 rounded-xl border border-[#E5E7EB]">
             <button
               type="button"
               onClick={() => navigate("/kds")}
@@ -109,7 +111,7 @@ export const StaffLayout: React.FC<StaffLayoutProps> = ({
               <LayoutDashboard className="h-3.5 w-3.5" />
               <span>Admin</span>
             </button>
-          </nav>
+          </nav>}
 
           {/* Right: Sound toggle, Storefront Link, Lock */}
           <div className="flex items-center gap-2">

@@ -20,7 +20,6 @@ export interface ItemCustomization {
   size?: string;
   iceLevel?: "Less" | "Regular" | "Extra" | string;
   sweetness?: "Regular Sweetness" | "Less Sweet" | "Light Sweet" | "No Sugar" | "100%" | "75%" | "50%" | "25%" | "0%" | "50% Sugar" | string;
-  servingPreference?: "Warmed Up" | "Room Temp" | string;
   milkOption?: string;
   addOns?: string[];
   specialInstructions?: string;
@@ -35,7 +34,13 @@ export interface Product {
   imageUrl: string;
   categoryId: string;
   categoryName?: string;
+  categoryIds?: string[];
+  productType?: "BEVERAGE" | "FOOD";
   isAvailable: boolean;
+  manualAvailability?: boolean;
+  isArchived?: boolean;
+  ingredientIds?: string[];
+
   popular?: boolean;
   topPick?: boolean;
   houseSpecial?: boolean;
@@ -49,6 +54,7 @@ export interface Product {
   enabledCustomizationGroups?: CustomizationGroup[];
   milkOptions?: CustomizationOption[];
   addonOptions?: CustomizationOption[];
+  allowedOptionIds?: string[];
   tags?: string[];
 }
 
@@ -58,8 +64,37 @@ export interface Category {
   slug: string;
   description?: string;
   iconName?: string;
-  iconEmoji?: string;
   sortOrder: number;
+  productType?: "BEVERAGE" | "FOOD";
+  isActive?: boolean;
+  isArchived?: boolean;
+}
+
+export interface CustomizationGroupConfig {
+  id: string;
+  name: string;
+  selectionMode: "SINGLE" | "MULTIPLE";
+  isActive: boolean;
+  isRequired?: boolean;
+  sortOrder?: number;
+  isArchived?: boolean;
+}
+
+export interface CustomizationOptionConfig {
+  id: string;
+  groupId: string;
+  name: string;
+  priceModifier: number;
+  isActive: boolean;
+  isArchived?: boolean;
+}
+
+export interface Ingredient {
+  id: string;
+  name: string;
+  isAvailable: boolean;
+  isArchived?: boolean;
+  productIds?: string[];
 }
 
 export interface CartItem {

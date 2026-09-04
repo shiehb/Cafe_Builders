@@ -48,6 +48,8 @@ export const StaffGuard: React.FC<StaffGuardProps> = ({
   const [pinInput, setPinInput] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isShaking, setIsShaking] = useState<boolean>(false);
+  // Keep the SSR output and the first client render on the same placeholder.
+  const [isMounted, setIsMounted] = useState<boolean>(false);
   const [isCheckingInitial, setIsCheckingInitial] = useState<boolean>(true);
 
   // Authenticate and save token to sessionStorage and verify server session
@@ -67,13 +69,15 @@ export const StaffGuard: React.FC<StaffGuardProps> = ({
 
   // Check initial state on mount (Server Session Cookie + sessionStorage + Secret URL parameter)
   useEffect(() => {
-    let isMounted = true;
+    let isActive = true;
+
+    setIsMounted(true);
 
     async function initCheck() {
       // 1. Check if server already has a valid HttpOnly admin_session cookie
       try {
         const session = await checkServerSession();
-        if (session.authenticated && isMounted) {
+        if (session.authenticated && isActive) {
           setIsAuthenticated(true);
           setIsCheckingInitial(false);
           return;
@@ -85,7 +89,7 @@ export const StaffGuard: React.FC<StaffGuardProps> = ({
       // 2. Check existing local session token
       try {
         const existingToken = sessionStorage.getItem(storageKey);
-        if (existingToken && isMounted) {
+        if (existingToken && isActive) {
           setIsAuthenticated(true);
           setIsCheckingInitial(false);
           return;
@@ -96,28 +100,28 @@ export const StaffGuard: React.FC<StaffGuardProps> = ({
 
       // 3. Check Secret URL Access parameter: ?pin=xxxx or ?key=xxxx or ?secret=xxxx
       const urlPin = getQueryParam("pin") || getQueryParam("key") || getQueryParam("secret");
-      if (urlPin && isMounted) {
+      if (urlPin && isActive) {
         const role = pinEnvKey.replace("_PIN", "").toLowerCase();
         const res = await loginWithAdminPin(urlPin, role);
-        if (res.success && isMounted) {
+        if (res.success && isActive) {
           grantAccess("secret_url");
           setIsCheckingInitial(false);
           return;
-        } else if (urlPin === expectedPin && isMounted) {
+        } else if (urlPin === expectedPin && isActive) {
           grantAccess("secret_url");
           setIsCheckingInitial(false);
           return;
         }
       }
 
-      if (isMounted) {
+      if (isActive) {
         setIsCheckingInitial(false);
       }
     }
 
     initCheck();
     return () => {
-      isMounted = false;
+      isActive = false;
     };
   }, [storageKey, expectedPin, grantAccess, pinEnvKey]);
 
@@ -202,7 +206,7 @@ export const StaffGuard: React.FC<StaffGuardProps> = ({
     setIsAuthenticated(false);
   };
 
-  if (isCheckingInitial) {
+  if (!isMounted || isCheckingInitial) {
     return (
       <div className="min-h-screen bg-stone-950 flex items-center justify-center text-stone-400">
         <div className="flex items-center gap-3">

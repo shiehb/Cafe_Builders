@@ -125,7 +125,7 @@ export function KdsPage() {
         setLastNotificationMsg(`🔔 New Incoming Order #${order.orderNumber}`);
         setTimeout(() => setLastNotificationMsg(null), 5000);
       } else if (event === "order_status_updated" && order.status === "READY") {
-        setLastNotificationMsg(`☕ Order #${order.orderNumber} marked Ready for Pickup!`);
+        setLastNotificationMsg(`Order #${order.orderNumber} marked Ready for Pickup!`);
         setTimeout(() => setLastNotificationMsg(null), 4000);
       }
     },

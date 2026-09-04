@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { ArrowLeft, Save, Trash2, Image as ImageIcon, Flame, AlertCircle, RefreshCw } from "lucide-react";
-import { Product } from "../types";
+import { Ingredient, Product } from "../types";
 import { CATEGORIES, PRODUCTS } from "../data/menuData";
 import { formatPrice } from "../lib/utils";
 import { navigate } from "../lib/router";
@@ -40,6 +40,8 @@ const AdminProductEditContent: React.FC<{ productId: string }> = ({ productId })
   const [imageUrl, setImageUrl] = useState<string>("");
   const [popular, setPopular] = useState<boolean>(false);
   const [isAvailable, setIsAvailable] = useState<boolean>(true);
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [ingredientIds, setIngredientIds] = useState<string[]>([]);
 
   // Modal / Confirm States
   const [isConfirmSaveOpen, setIsConfirmSaveOpen] = useState<boolean>(false);
@@ -71,6 +73,13 @@ const AdminProductEditContent: React.FC<{ productId: string }> = ({ productId })
     };
   }, [productId]);
 
+  useEffect(() => {
+    fetch("/api/admin/ingredients", { credentials: "include" })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => setIngredients(Array.isArray(data?.data) ? data.data : []))
+      .catch(() => undefined);
+  }, []);
+
   // Sync state when product is loaded
   useEffect(() => {
     if (product) {
@@ -81,6 +90,7 @@ const AdminProductEditContent: React.FC<{ productId: string }> = ({ productId })
       setImageUrl(product.imageUrl || "");
       setPopular(Boolean(product.popular));
       setIsAvailable(product.isAvailable !== false);
+      setIngredientIds(product.ingredientIds || []);
     }
   }, [product]);
 
@@ -140,6 +150,7 @@ const AdminProductEditContent: React.FC<{ productId: string }> = ({ productId })
           description: description.trim(),
           popular,
           isAvailable,
+          ingredientIds,
         }),
       });
 
@@ -335,6 +346,18 @@ const AdminProductEditContent: React.FC<{ productId: string }> = ({ productId })
                 onChange={(e) => setPopular(e.target.checked)}
                 className="h-5 w-5 rounded accent-[#00A86B] cursor-pointer"
               />
+            </div>
+          </div>
+
+          <div className="bg-stone-900 border border-stone-800 rounded-3xl p-5 space-y-3">
+            <div><h2 className="text-xs font-black uppercase text-stone-400 tracking-wider">Required Ingredients</h2><p className="text-[10px] text-stone-500 mt-1">Linked stock controls this product's availability.</p></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {ingredients.filter((ingredient) => !ingredient.isArchived).map((ingredient) => (
+                <label key={ingredient.id} className="min-h-11 px-3 rounded-xl bg-stone-950 border border-stone-800 flex items-center gap-2 text-xs font-bold text-stone-200 cursor-pointer">
+                  <input type="checkbox" checked={ingredientIds.includes(ingredient.id)} onChange={(event) => setIngredientIds((previous) => event.target.checked ? [...previous, ingredient.id] : previous.filter((id) => id !== ingredient.id))} className="h-4 w-4 accent-[#00A86B]" />
+                  {ingredient.name}
+                </label>
+              ))}
             </div>
           </div>
 

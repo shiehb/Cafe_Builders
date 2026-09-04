@@ -24,11 +24,6 @@ const BEVERAGE_ADDONS = [
   { label: "Vanilla Bean Syrup", price: 20 },
 ];
 
-const FOOD_WARMING_OPTIONS = [
-  { label: "Warmed Up", description: "Freshly heated & served warm", icon: "♨️" },
-  { label: "Room Temp", description: "Served fresh as is", icon: "🥐" },
-];
-
 const FOOD_ADDONS = [
   { label: "Extra Whipped Butter", price: 20 },
   { label: "Artisan Honey Drizzle", price: 20 },
@@ -43,21 +38,8 @@ interface EditCartItemPageProps {
 export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }) => {
   const { cart, updateCartItem } = useCart();
 
-  // Resolve effective cart with fallback to localStorage
-  const effectiveCart = useMemo(() => {
-    if (cart && cart.length > 0) return cart;
-    try {
-      const stored =
-        localStorage.getItem("cafe_customer_cart_v2") ||
-        localStorage.getItem("cafe_customer_cart") ||
-        localStorage.getItem("cafe_cart");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    return cart || [];
-  }, [cart]);
+  // CartContext owns browser storage hydration; keep this route render-pure.
+  const effectiveCart = useMemo(() => cart, [cart]);
 
   const cleanTargetId = decodeURIComponent(cartItemId || "").trim();
   const normalizedSearchId = cleanTargetId.toLowerCase();
@@ -100,12 +82,6 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
     if (raw.includes("Light")) return "25%";
     if (raw.includes("Less")) return "50%";
     return "50%";
-  });
-
-  const [foodWarming, setFoodWarming] = useState<string>(() => {
-    return cartItem?.customizations?.servingPreference?.includes("Room")
-      ? "Room Temp"
-      : "Warmed Up";
   });
 
   const [selectedMilk, setSelectedMilk] = useState(() => {
@@ -195,7 +171,6 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
     if (!cartItem) return;
     const updatedCustomizations: ItemCustomization = isFood
       ? {
-          servingPreference: foodWarming,
           addOns: selectedAddons.map((a) => `${a.label} (+${formatPrice(a.price)})`),
           specialInstructions: specialInstructions.trim() || undefined,
         }
@@ -268,40 +243,6 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
           {isFood ? (
             /* ===== FOOD / PASTRIES OPTIONS ===== */
             <>
-              {/* Serving Preference */}
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-[15px] font-bold text-[#1F2937]">Serving Preference</h2>
-                  <span className="text-[11px] text-[#6B7280]">Select 1</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2.5">
-                  {FOOD_WARMING_OPTIONS.map((opt) => {
-                    const isSelected = foodWarming === opt.label;
-                    return (
-                      <button
-                        key={opt.label}
-                        type="button"
-                        onClick={() => setFoodWarming(opt.label)}
-                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
-                          isSelected
-                            ? "border-[#00A86B] bg-[#E6F6F0]"
-                            : "border-[#E5E7EB] bg-[#F7F9FA] hover:bg-stone-100"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className={`text-[13px] font-bold flex items-center gap-1.5 ${isSelected ? "text-[#00A86B]" : "text-[#1F2937]"}`}>
-                            <span>{opt.icon}</span>
-                            <span>{opt.label}</span>
-                          </span>
-                          {isSelected && <Check className="h-4 w-4 text-[#00A86B]" />}
-                        </div>
-                        <p className="text-[11px] text-[#6B7280]">{opt.description}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
               {/* Food Add-ons */}
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
