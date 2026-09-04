@@ -51,14 +51,14 @@ export const SeasonalHeroCarousel: React.FC<SeasonalHeroCarouselProps> = ({
 
   return (
     <section className="w-full pt-0 p-0">
-      {/* 4:3 Landscape Aspect Ratio Hero Image Container without rounded corners */}
+      {/* 16:9 Landscape Aspect Ratio Hero Image Container without rounded corners */}
       <div
         onClick={() => {
           if (currentSlide.product) {
             onSelectProduct(currentSlide.product);
           }
         }}
-        className="relative w-full aspect-[4/3] rounded-none overflow-hidden shadow-card bg-stone-900 cursor-pointer group select-none"
+        className="relative w-full aspect-[16/9] rounded-none overflow-hidden shadow-card bg-stone-900 cursor-pointer group select-none"
       >
         <img
           src={currentSlide.imageUrl}

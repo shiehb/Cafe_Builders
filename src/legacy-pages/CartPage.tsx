@@ -122,7 +122,7 @@ export const CartPage: React.FC = () => {
       </header>
 
       {/* 2. MAIN CONTENT */}
-      <main className="max-w-3xl w-full mx-auto px-4 sm:px-6 py-4 space-y-4 flex-1 pb-52">
+      <main className="max-w-3xl w-full mx-auto px-4 sm:px-6 py-4 space-y-4 flex-1 pb-64">
         {cart.length === 0 ? (
           <div className="bg-white rounded-2xl p-10 border border-[#E5E7EB] shadow-xs text-center space-y-3 my-6">
             <div className="h-16 w-16 rounded-full bg-[#F3F4F6] flex items-center justify-center mx-auto text-[#6B7280]">
@@ -186,7 +186,7 @@ export const CartPage: React.FC = () => {
                             {customizationSubtext}
                           </p>
                           
-                          {/* Price and Edit Button Side-by-Side */}
+                          {/* Price and Edit Button */}
                           <div className="flex items-center gap-2 mt-1.5">
                             <span className="text-[15px] font-bold text-[#1F2937]">
                               {formatPrice(item.lineTotal)}
@@ -238,72 +238,6 @@ export const CartPage: React.FC = () => {
               </AnimatePresence>
             </div>
 
-            {/* Promo Code Card */}
-            <div className="bg-white rounded-2xl p-4 border border-[#E5E7EB] shadow-xs space-y-2.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Tag className="h-4 w-4 text-[#00A86B]" />
-                  <span className="text-[13px] font-bold text-[#1F2937]">Promotion Code</span>
-                </div>
-                {appliedPromoCode && (
-                  <span className="text-[10px] font-bold text-[#00A86B] bg-[#E6F6F0] px-2 py-0.5 rounded-full">
-                    Applied
-                  </span>
-                )}
-              </div>
-
-              {appliedPromoCode ? (
-                <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#E6F6F0] border border-[#00A86B]/30">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="h-6 w-6 rounded-full bg-[#00A86B] text-white flex items-center justify-center shrink-0">
-                      <Check className="h-3.5 w-3.5 stroke-[3]" />
-                    </div>
-                    <div className="truncate text-[12px]">
-                      <span className="font-bold text-[#00A86B]">{appliedPromoCode}</span>
-                      <span className="text-[#008F5B] ml-1.5">(-{formatPrice(promoDiscount)})</span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleRemovePromo}
-                    className="p-1 text-[#6B7280] hover:text-rose-600 rounded-lg hover:bg-white/80 transition-colors cursor-pointer"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={promoInput}
-                      onChange={(e) => setPromoInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          handleApplyPromo();
-                        }
-                      }}
-                      placeholder="Enter code (e.g. SAVE10)"
-                      className="flex-1 bg-white border border-[#E5E7EB] rounded-xl px-3 py-2 text-[12px] text-[#1F2937] placeholder:text-[#9CA3AF] outline-none focus:border-[#00A86B]"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleApplyPromo}
-                      className="px-3.5 py-2 rounded-xl bg-[#00A86B] hover:bg-[#008F5B] text-white font-bold text-[12px] transition-colors cursor-pointer shrink-0"
-                    >
-                      Apply
-                    </button>
-                  </div>
-                  {promoMessage && (
-                    <p className={`text-[11px] px-1 ${promoMessage.isError ? "text-rose-600" : "text-[#00A86B]"}`}>
-                      {promoMessage.text}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-
             {/* + Add More Items Button */}
             <div className="text-center pt-1 pb-1">
               <button
@@ -318,19 +252,78 @@ export const CartPage: React.FC = () => {
         )}
       </main>
 
-      {/* 3. STICKY BOTTOM BAR WITH SUBTOTAL, DISCOUNT & TOTAL AMOUNT */}
+      {/* 3. STICKY FOOTER WITH PROMO CODE & COST BREAKDOWN */}
       {cart.length > 0 && (
         <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-[#E5E7EB] shadow-footer safe-bottom-fixed">
           <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 space-y-3">
-            <div className="space-y-1.5 text-[13px]">
+            
+            {/* Promo Code Input in Footer */}
+            <div className="space-y-1">
+              {appliedPromoCode ? (
+                <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-[#E6F6F0] border border-[#00A86B]/30">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="h-5 w-5 rounded-full bg-[#00A86B] text-white flex items-center justify-center shrink-0">
+                      <Check className="h-3 w-3 stroke-[3]" />
+                    </div>
+                    <div className="truncate text-[12px]">
+                      <span className="font-bold text-[#00A86B]">{appliedPromoCode}</span>
+                      <span className="text-[#008F5B] ml-1.5">(-{formatPrice(promoDiscount)})</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRemovePromo}
+                    className="p-1 text-[#6B7280] hover:text-rose-600 rounded-lg hover:bg-white/80 transition-colors cursor-pointer"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Tag className="h-3.5 w-3.5 text-[#9CA3AF] absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={promoInput}
+                        onChange={(e) => setPromoInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleApplyPromo();
+                          }
+                        }}
+                        placeholder="Promo code (e.g. SAVE10)"
+                        className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl pl-8 pr-3 py-1.5 text-[12px] text-[#1F2937] placeholder:text-[#9CA3AF] outline-none focus:border-[#00A86B]"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleApplyPromo}
+                      className="px-3 py-1.5 rounded-xl bg-[#00A86B] hover:bg-[#008F5B] text-white font-bold text-[12px] transition-colors cursor-pointer shrink-0"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                  {promoMessage && (
+                    <p className={`text-[11px] mt-1 px-1 ${promoMessage.isError ? "text-rose-600" : "text-[#00A86B]"}`}>
+                      {promoMessage.text}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Subtotal, Discount & Total Amount Breakdown */}
+            <div className="space-y-2 text-[13px] pt-2 border-t border-[#E5E7EB]">
               {/* Subtotal */}
               <div className="flex justify-between items-center text-[#6B7280]">
                 <span>Subtotal</span>
                 <span className="font-semibold text-[#1F2937]">{formatPrice(cartTotal)}</span>
               </div>
 
-              {/* Discount (Placed under Subtotal) */}
-              <div className="flex justify-between items-center text-[#6B7280]">
+              {/* Highly Visible Bottom Line Under Discount */}
+              <div className="flex justify-between items-center text-[#6B7280] pb-2 border-b-2 border-[#D1D5DB]">
                 <span>Discount {appliedPromoCode ? `(${appliedPromoCode})` : ""}</span>
                 <span className={`font-semibold ${promoDiscount > 0 ? "text-[#00A86B]" : "text-[#1F2937]"}`}>
                   {promoDiscount > 0 ? `-${formatPrice(promoDiscount)}` : formatPrice(0)}
@@ -338,7 +331,7 @@ export const CartPage: React.FC = () => {
               </div>
 
               {/* Total Amount */}
-              <div className="flex justify-between items-center pt-1 border-t border-[#E5E7EB]/60">
+              <div className="flex justify-between items-center pt-1">
                 <span className="text-[15px] font-bold text-[#1F2937]">Total Amount</span>
                 <span className="text-[18px] font-bold text-[#00A86B]">{formatPrice(finalTotal)}</span>
               </div>
