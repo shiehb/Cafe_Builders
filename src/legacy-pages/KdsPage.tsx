@@ -255,7 +255,6 @@ export function KdsPage() {
       title="Kitchen Display System"
       subtitle="Enter 4-digit PIN to access live kitchen order queue"
       roleName="Kitchen Staff Terminal"
-      defaultPin="1234"
     >
       <StaffLayout
         activeTab="kds"

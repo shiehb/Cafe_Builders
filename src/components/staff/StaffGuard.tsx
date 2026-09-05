@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Lock, Unlock, KeyRound, ShieldAlert, ArrowLeft, Delete, Coffee, RefreshCw, RotateCcw } from "lucide-react";
-import { navigate, getQueryParam } from "../../lib/router";
+import React, { useState, useEffect, useCallback } from "react";
+import { Lock, ArrowLeft, Delete, RefreshCw, RotateCcw } from "lucide-react";
+import { navigate } from "../../lib/router";
 import { loginWithAdminPin, checkServerSession, logoutAdminSession } from "../../lib/auth";
 
 export interface StaffGuardProps {
@@ -8,41 +8,26 @@ export interface StaffGuardProps {
   title: string;
   subtitle?: string;
   roleName?: string;
-  defaultPin?: string;
   children: React.ReactNode;
 }
 
-const DEMO_FALLBACK_PINS: Record<string, string> = {
-  KDS_PIN: "1234",
-  POS_PIN: "1234",
-  ADMIN_PIN: "9999",
-};
-
+/**
+ * Client-side gate for staff terminals.
+ *
+ * The ONLY source of truth for authentication is the server session
+ * (HttpOnly admin_session cookie). This component never derives
+ * authentication from local state: no sessionStorage tokens, no URL
+ * parameters, and no client-side PIN comparison. All PIN verification goes
+ * through the server's /api/auth/login endpoint.
+ */
 export const StaffGuard: React.FC<StaffGuardProps> = ({
   pinEnvKey,
   title,
   subtitle = "Enter 4-digit security PIN to access terminal",
   roleName = "Staff Terminal",
-  defaultPin,
   children,
 }) => {
-  const storageKey = `staff_auth_token_${pinEnvKey.toLowerCase()}`;
-
-  // Resolve an explicitly supplied client-safe environment value or fallback.
-  const expectedPin = useMemo(() => {
-    const fromRaw = typeof process !== "undefined" ? process.env[`NEXT_PUBLIC_${pinEnvKey}`] : undefined;
-    if (fromRaw && typeof fromRaw === "string" && fromRaw.trim()) {
-      return fromRaw.trim();
-    }
-
-    // Try defaultPin prop
-    if (defaultPin && defaultPin.trim()) {
-      return defaultPin.trim();
-    }
-
-    // 4. Fallback default per role
-    return DEMO_FALLBACK_PINS[pinEnvKey] || "1234";
-  }, [pinEnvKey, defaultPin]);
+  const role = pinEnvKey.replace("_PIN", "").toLowerCase();
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [pinInput, setPinInput] = useState<string>("");
@@ -52,66 +37,25 @@ export const StaffGuard: React.FC<StaffGuardProps> = ({
   const [isMounted, setIsMounted] = useState<boolean>(false);
   const [isCheckingInitial, setIsCheckingInitial] = useState<boolean>(true);
 
-  // Authenticate and save token to sessionStorage and verify server session
-  const grantAccess = useCallback(
-    (reason: string = "pin") => {
-      const token = `tok_${pinEnvKey}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      try {
-        sessionStorage.setItem(storageKey, token);
-      } catch (e) {
-        console.warn("Could not save to sessionStorage", e);
-      }
-      setIsAuthenticated(true);
-      setErrorMsg(null);
-    },
-    [storageKey, pinEnvKey]
-  );
+  const grantAccess = useCallback(() => {
+    setIsAuthenticated(true);
+    setErrorMsg(null);
+  }, []);
 
-  // Check initial state on mount (Server Session Cookie + sessionStorage + Secret URL parameter)
+  // Authoritative initial check: only the server session grants access.
   useEffect(() => {
     let isActive = true;
 
     setIsMounted(true);
 
     async function initCheck() {
-      // 1. Check if server already has a valid HttpOnly admin_session cookie
       try {
         const session = await checkServerSession();
         if (session.authenticated && isActive) {
           setIsAuthenticated(true);
-          setIsCheckingInitial(false);
-          return;
         }
       } catch {
-        // Fallback to local session check
-      }
-
-      // 2. Check existing local session token
-      try {
-        const existingToken = sessionStorage.getItem(storageKey);
-        if (existingToken && isActive) {
-          setIsAuthenticated(true);
-          setIsCheckingInitial(false);
-          return;
-        }
-      } catch {
-        // sessionStorage unavailable
-      }
-
-      // 3. Check Secret URL Access parameter: ?pin=xxxx or ?key=xxxx or ?secret=xxxx
-      const urlPin = getQueryParam("pin") || getQueryParam("key") || getQueryParam("secret");
-      if (urlPin && isActive) {
-        const role = pinEnvKey.replace("_PIN", "").toLowerCase();
-        const res = await loginWithAdminPin(urlPin, role);
-        if (res.success && isActive) {
-          grantAccess("secret_url");
-          setIsCheckingInitial(false);
-          return;
-        } else if (urlPin === expectedPin && isActive) {
-          grantAccess("secret_url");
-          setIsCheckingInitial(false);
-          return;
-        }
+        // No session authority available; remain locked.
       }
 
       if (isActive) {
@@ -123,35 +67,30 @@ export const StaffGuard: React.FC<StaffGuardProps> = ({
     return () => {
       isActive = false;
     };
-  }, [storageKey, expectedPin, grantAccess, pinEnvKey]);
+  }, []);
 
-  // Handle PIN verification with secure server-side POST /api/auth/login
+  // Verify the PIN with the server. There is no client-side fallback: a failed
+  // server response keeps the terminal locked.
   const verifyPin = useCallback(
     async (entered: string) => {
-      const role = pinEnvKey.replace("_PIN", "").toLowerCase();
       try {
         const res = await loginWithAdminPin(entered, role);
         if (res.success) {
-          grantAccess("pin");
+          grantAccess();
           return;
         }
       } catch (e) {
-        console.warn("Server PIN auth network error, trying fallback check:", e);
+        console.warn("Server PIN auth error:", e);
       }
 
-      // Fallback check against expectedPin or demo emergency
-      if (entered === expectedPin || entered === "0000" || (pinEnvKey !== "ADMIN_PIN" && entered === "1234")) {
-        grantAccess("pin");
-      } else {
-        setIsShaking(true);
-        setErrorMsg("Incorrect PIN. Please try again.");
-        setTimeout(() => {
-          setIsShaking(false);
-          setPinInput("");
-        }, 600);
-      }
+      setIsShaking(true);
+      setErrorMsg("Incorrect PIN. Please try again.");
+      setTimeout(() => {
+        setIsShaking(false);
+        setPinInput("");
+      }, 600);
     },
-    [expectedPin, grantAccess, pinEnvKey]
+    [grantAccess, role]
   );
 
   // Auto-verify when 4 digits are reached
@@ -194,14 +133,9 @@ export const StaffGuard: React.FC<StaffGuardProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isAuthenticated, pinInput, handleDigitPress, handleBackspace, handleClear]);
 
-  // Lock function to reset authentication
+  // Lock clears the server session cookie and returns to the PIN screen.
   const handleLock = () => {
     logoutAdminSession().catch(() => {});
-    try {
-      sessionStorage.removeItem(storageKey);
-    } catch {
-      // ignore
-    }
     setPinInput("");
     setIsAuthenticated(false);
   };
@@ -236,7 +170,7 @@ export const StaffGuard: React.FC<StaffGuardProps> = ({
           onClick={() => navigate("/")}
           aria-label="Back to Customer Menu"
           title="Back to Customer Menu"
-          className="h-10 w-10 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-stone-800 text-stone-300 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
+          className="h-10 w-10 rounded-xl bg-stone-900/80 hover:bg-stone-900 border border-stone-800 text-stone-300 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
@@ -285,7 +219,7 @@ export const StaffGuard: React.FC<StaffGuardProps> = ({
         <div className="min-h-[22px] flex items-center justify-center text-center">
           {errorMsg ? (
             <div className="inline-flex items-center gap-1.5 text-xs text-rose-400 font-semibold animate-in fade-in">
-              <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
+              <Lock className="h-3.5 w-3.5" />
               <span>{errorMsg}</span>
             </div>
           ) : (
@@ -338,32 +272,21 @@ export const StaffGuard: React.FC<StaffGuardProps> = ({
             <Delete className="h-5 w-5" />
           </button>
         </div>
-
-        {/* Demo Helper Badge & Quick Link */}
-        <div className="pt-2 text-center space-y-2">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-stone-900/90 border border-stone-800 text-[11px] text-stone-400">
-            <KeyRound className="h-3 w-3 text-stone-400" />
-            <span>
-              Default demo PIN: <strong className="text-stone-200 font-mono">{expectedPin}</strong>
-            </span>
-          </div>
-
-          <p className="text-[10px] text-stone-400">
-            Tip: You can also bookmark with secret URL <code className="text-stone-400 bg-stone-900 px-1 py-0.5 rounded">?pin={expectedPin}</code>
-          </p>
-        </div>
       </div>
     </div>
   );
 };
 
 /**
- * Utility helper to logout/lock from any staff terminal component
+ * Locks a staff terminal by clearing the server session (the only
+ * authentication authority) and reloading into the PIN gate.
  */
-export function lockStaffSession(pinEnvKey: string) {
-  try {
-    sessionStorage.removeItem(`staff_auth_token_${pinEnvKey.toLowerCase()}`);
-  } catch (e) {
-    console.warn("Could not clear session token", e);
-  }
+export function lockStaffSession(_pinEnvKey: string) {
+  logoutAdminSession()
+    .catch(() => {})
+    .finally(() => {
+      if (typeof window !== "undefined") {
+        window.location.reload();
+      }
+    });
 }

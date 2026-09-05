@@ -59,6 +59,7 @@ export const CheckoutPage: React.FC = () => {
         unitPrice: item.unitPrice,
         subtotal: item.lineTotal,
         customizations: item.customizations,
+        selectedOptionIds: item.customizations?.selectedOptionIds ?? [],
         notes: item.customizations.specialInstructions,
       })),
       customerName: customerName.trim(),

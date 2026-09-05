@@ -222,7 +222,7 @@ model Order {
   orderNumber     String        @unique
   status          OrderStatus   @default(PENDING_PAYMENT)
   paymentMethod   PaymentMethod
-  paymentIntentId String?
+  paymentIntentId String? @unique
   paymentMethodId String?
   qrCodeUrl       String?
   customerName    String?

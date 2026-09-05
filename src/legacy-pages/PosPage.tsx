@@ -258,7 +258,6 @@ export function PosPage() {
       title="Cashier POS Terminal"
       subtitle="Enter 4-digit PIN to access register terminal"
       roleName="Cashier Terminal"
-      defaultPin="1234"
     >
       <StaffLayout
         activeTab="pos"

@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { getDb } from "../lib/prisma";
+import { AppError } from "./errors";
 import { recalculateProductAvailability } from "./inventoryService";
 import { decimalToNumber, toDecimal } from "./serialization";
 import {
@@ -244,6 +245,28 @@ export async function createProduct(
     optionId,
   }));
 
+  // Validate that every allowlisted option exists and belongs to a group linked
+  // to the product. Prevents orphaned allowed options that would be rejected at
+  // checkout (OPTION_NOT_FOUND / OPTION_NOT_ALLOWED).
+  if (optionCreates.length > 0) {
+    const linkedGroupIds = groupCreates.map((g) => g.groupId);
+    const allowedOptionsInDb = await db.customizationOption.findMany({
+      where: { id: { in: optionCreates.map((o) => o.optionId) } },
+      include: { group: true },
+    });
+    const allowedOptionMap = new Map(allowedOptionsInDb.map((o) => [o.id, o]));
+
+    for (const oc of optionCreates) {
+      const opt = allowedOptionMap.get(oc.optionId);
+      if (!opt) {
+        throw new AppError(404, "OPTION_NOT_FOUND", `Customization option '${oc.optionId}' does not exist`);
+      }
+      if (!linkedGroupIds.includes(opt.groupId)) {
+        throw new AppError(400, "INVALID_OPTION_GROUP", `Customization option "${opt.name}" belongs to a group not linked to this product`);
+      }
+    }
+  }
+
   // 3. Create product record
   const created = await db.product.create({
     data: {
@@ -352,6 +375,40 @@ export async function updateProduct(
 
     // 4. Update allowed options if specified
     if (input.allowedOptionIds !== undefined) {
+      // Validate against the incoming group list when provided, otherwise the
+      // product's existing group links, so the allowlist never references an
+      // option from an unlinked group.
+      if (input.allowedOptionIds.length > 0) {
+        let linkedGroupIds: string[];
+        if (input.customizationGroupIds !== undefined) {
+          linkedGroupIds = input.customizationGroupIds.map((g) =>
+            typeof g === "string" ? g : g.groupId
+          );
+        } else {
+          const links = await tx.productCustomizationGroup.findMany({
+            where: { productId: id },
+            select: { groupId: true },
+          });
+          linkedGroupIds = links.map((l) => l.groupId);
+        }
+
+        const allowedOptionsInDb = await tx.customizationOption.findMany({
+          where: { id: { in: input.allowedOptionIds } },
+          include: { group: true },
+        });
+        const allowedOptionMap = new Map(allowedOptionsInDb.map((o) => [o.id, o]));
+
+        for (const optionId of input.allowedOptionIds) {
+          const opt = allowedOptionMap.get(optionId);
+          if (!opt) {
+            throw new AppError(404, "OPTION_NOT_FOUND", `Customization option '${optionId}' does not exist`);
+          }
+          if (!linkedGroupIds.includes(opt.groupId)) {
+            throw new AppError(400, "INVALID_OPTION_GROUP", `Customization option "${opt.name}" belongs to a group not linked to this product`);
+          }
+        }
+      }
+
       await tx.productCustomizationOption.deleteMany({ where: { productId: id } });
       if (input.allowedOptionIds.length > 0) {
         await tx.productCustomizationOption.createMany({

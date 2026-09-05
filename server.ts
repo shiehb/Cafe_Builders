@@ -4,6 +4,7 @@ import cookieParser from "cookie-parser";
 import next from "next";
 import dotenv from "dotenv";
 import { createPayMongoQRPhPayment } from "./src/lib/paymongo";
+import { createPayMongoQRPhPayment, PayMongoNotConfiguredError } from "./src/lib/paymongo";
 import { Order, OrderStatus, CheckoutPayload, Product } from "./src/types";
 import { broadcastKitchenOrder, broadcastProductUpdate } from "./src/lib/supabase";
 import { getDb } from "./src/lib/prisma";
@@ -828,6 +829,15 @@ async function processCheckout(body: CheckoutPayload) {
   let paymentIntentId: string | null = null;
   let paymentMethodId: string | null = null;
 
+  // F11-A1 — generate the QR BEFORE persisting payment identifiers, and fail
+   // explicitly if PayMongo cannot produce a real collectible payment. We never
+   // surface a fake/simulated QR as a live payment. createPayMongoQRPhPayment
+   // throws on any live failure (or when payment/simulation is not configured).
+   // The order row created above is removed so a failed online payment never
+   // leaves a phantom, unpayable PENDING_PAYMENT order in the staff queue
+   // (it was never broadcast and its payment ids are null, so nothing binding
+   // to it can exist).
+   try {
   if (paymentMethod === "QRPH") {
     const qrRes = await createPayMongoQRPhPayment(
       createdOrder.totalAmount,
@@ -835,6 +845,25 @@ async function processCheckout(body: CheckoutPayload) {
       `Artisan Cafe - Order ${createdOrder.orderNumber}`
     );
     qrCodeUrl = qrRes.qrImageUrl;
+      } catch (err) {
+        await db.order
+          .delete({ where: { id: createdOrder.id } })
+          .catch((cleanupErr: unknown) => {
+            console.warn("[Checkout] Could not remove unfinalized order after QR failure:", cleanupErr);
+          });
+        if (err instanceof PayMongoNotConfiguredError) {
+          throw new AppError(
+            503,
+            "PAYMENT_UNAVAILABLE",
+            "Online payment is not available for this order. Please pay at the counter."
+          );
+        }
+        throw new AppError(
+          503,
+          "PAYMENT_PROVIDER_UNAVAILABLE",
+          "Payment provider could not be reached. Please try again or pay at the counter."
+        );
+      }
     paymentIntentId = qrRes.paymentIntentId;
     paymentMethodId = qrRes.paymentMethodId;
 
@@ -1022,6 +1051,47 @@ function verifySignature(
 }
 
 // 8. PayMongo Webhook API Endpoint: /api/webhooks/paymongo & /api/paymongo-webhook
+  // F11-A3 — fail-closed webhook secret policy.
+   //
+   // A configured secret always gates the request via F3 signature verification,
+   // and a missing/bad signature is always rejected. The only exception to
+   // signature enforcement is an EXPLICIT, clearly named, off-by-default
+   // development override (PAYMONGO_ALLOW_UNSIGNED_WEBHOOKS_DEV=true). That
+   // override:
+   //   - defaults OFF (an unset/any-non-"true" value keeps verification on),
+   //   - is IGNORED in production (NODE_ENV === "production"), and
+   //   - is IGNORED when a webhook secret IS configured (a real signature is
+   //     still required and verified).
+   // Production therefore rejects unsigned webhooks regardless of the override.
+   // This preserves the previous fail-closed production 503 when the secret is
+   // missing, while removing the old behavior of silently accepting unsigned
+   // webhooks in development just because NODE_ENV was not "production".
+   const allowUnsignedDevOnly =
+     !isProduction && process.env.PAYMONGO_ALLOW_UNSIGNED_WEBHOOKS_DEV === "true";
+
+   if (webhookSecret) {
+     if (!verifySignature(rawBody, signatureHeader, webhookSecret)) {
+       console.warn("[PayMongo Webhook] Invalid webhook signature rejected");
+       return res.status(401).json({ error: "Invalid signature" });
+     }
+   } else if (!allowUnsignedDevOnly) {
+     // No secret configured and the explicit dev override is not enabled.
+     // In production this is the documented fail-closed 503. In development the
+     // override must be explicitly enabled before unsigned events are accepted.
+     console.warn("[PayMongo Webhook] Rejecting webhook: PAYMONGO_WEBHOOK_SECRET_KEY is not configured");
+     return res.status(503).json({
+       error: "Webhook signature verification is not configured on this server.",
+       code: "WEBHOOK_SECRET_NOT_CONFIGURED",
+     });
+   }
+   // else: dev-only, explicit override enabled, no secret configured -> allow.
+   // Log loudly because processing unsigned events in dev is intentional but risky.
+   if (!webhookSecret && allowUnsignedDevOnly) {
+     console.warn(
+       "[PayMongo Webhook] WARNING: accepting unsigned webhook in development " +
+         "(PAYMONGO_ALLOW_UNSIGNED_WEBHOOKS_DEV=true and no PAYMONGO_WEBHOOK_SECRET_KEY)."
+     );
+   }
 const handlePayMongoWebhook = async (req: any, res: Response) => {
   const signatureHeader = req.headers["paymongo-signature"] as string | undefined;
   const webhookSecret = process.env.PAYMONGO_WEBHOOK_SECRET_KEY;

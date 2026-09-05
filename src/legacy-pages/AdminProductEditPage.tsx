@@ -19,7 +19,6 @@ export const AdminProductEditPage: React.FC<AdminProductEditPageProps> = ({ prod
       title="Admin Portal Access"
       subtitle="Enter security PIN to edit product details"
       roleName="Inventory Manager"
-      defaultPin="9999"
     >
       <AdminProductEditContent productId={productId} />
     </StaffGuard>

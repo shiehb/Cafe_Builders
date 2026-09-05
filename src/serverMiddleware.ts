@@ -1,5 +1,5 @@
 import { Request as ExpressRequest, Response as ExpressResponse, NextFunction } from "express";
-import { isRequestAuthorized, parseCookieString, verifySignedSessionToken, ADMIN_COOKIE_NAME } from "./lib/auth";
+import { requireRole, parseCookieString, verifySignedSessionToken, ADMIN_COOKIE_NAME } from "./lib/auth";
 
 /**
  * Protected routes config
@@ -21,13 +21,21 @@ export function expressAdminAuthMiddleware(
     return next();
   }
 
-  const authorized = isRequestAuthorized(req);
+  const { allowed, role } = requireRole(req, ["admin"]);
 
-  if (!authorized) {
+  if (role === null) {
     return res.status(401).json({
       error: "Unauthorized: Invalid or missing admin session credentials",
       code: "AUTH_REQUIRED",
       message: "Please enter your 4-digit PIN to authenticate this session.",
+    });
+  }
+
+  if (!allowed) {
+    return res.status(403).json({
+      error: "Insufficient role: admin access required",
+      code: "FORBIDDEN_ROLE",
+      message: "Your session role does not permit management access.",
     });
   }
 

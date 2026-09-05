@@ -5,7 +5,11 @@ import { formatPrice } from "../lib/utils";
 import { navigate } from "../lib/router";
 import { useCart } from "../context/CartContext";
 import { PRODUCTS } from "../data/menuData";
-import { isFoodCategory } from "./ItemCustomizationPage";
+import {
+  isFoodCategory,
+  deriveSelectableGroups,
+  SelectableGroup,
+} from "./ItemCustomizationPage";
 
 const SUGAR_LEVELS = ["0%", "25%", "50%", "75%", "100%"] as const;
 const ICE_LEVELS = ["Less", "Regular", "Extra"] as const;
@@ -30,6 +34,41 @@ const FOOD_ADDONS = [
   { label: "Crushed Roasted Pistachios", price: 30 },
   { label: "Warm Chocolate Dip", price: 35 },
 ];
+
+const resolveSelectedIds = (cust: ItemCustomization | undefined, groups: SelectableGroup[]): string[] => {
+  const optionIds = new Set<string>(cust?.selectedOptionIds ?? []);
+  const byName = new Map<string, string>();
+  for (const g of groups) {
+    for (const o of g.options) {
+      byName.set(o.name.toLowerCase().trim(), o.id);
+    }
+  }
+
+  // Legacy cart items (no selectedOptionIds) restore by exact display-name match.
+  if (!cust?.selectedOptionIds?.length) {
+    if (cust?.milkOption) {
+      const id = byName.get(cust.milkOption.toLowerCase().trim());
+      if (id) optionIds.add(id);
+    }
+    for (const str of cust?.addOns ?? []) {
+      const clean = str.replace(/\s*\(\+.*?\)/, "").trim().toLowerCase();
+      const id = byName.get(clean);
+      if (id) optionIds.add(id);
+    }
+  }
+
+  const valid = new Set(groups.flatMap((g) => g.options.map((o) => o.id)));
+  return [...optionIds].filter((id) => valid.has(id));
+};
+
+const selectionsFromIds = (ids: string[], groups: SelectableGroup[]): Record<string, string[]> => {
+  const result: Record<string, string[]> = {};
+  for (const g of groups) {
+    const picked = g.options.map((o) => o.id).filter((id) => ids.includes(id));
+    if (picked.length) result[g.groupId] = picked;
+  }
+  return result;
+};
 
 interface EditCartItemPageProps {
   cartItemId: string;
@@ -73,6 +112,10 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
 
   const isFood = isFoodCategory(product);
 
+  /** True when the product has server-authoritative raw customization data. */
+  const isAuthoritative = Array.isArray(product.customizationGroups);
+  const authoritativeGroups = deriveSelectableGroups(product);
+
   // Customization States
   const [quantity, setQuantity] = useState<number>(() => cartItem?.quantity || 1);
   const [iceLevel, setIceLevel] = useState<string>(() => {
@@ -115,6 +158,10 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
     () => cartItem?.customizations?.specialInstructions || ""
   );
 
+  const [groupSelections, setGroupSelections] = useState<Record<string, string[]>>(() =>
+    selectionsFromIds(resolveSelectedIds(cartItem?.customizations, authoritativeGroups), authoritativeGroups)
+  );
+
   // Sync if cartItem changes
   useEffect(() => {
     if (cartItem) {
@@ -137,6 +184,9 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
         const found = MILK_OPTIONS.find((m) => m.label === cartItem.customizations.milkOption);
         if (found) setSelectedMilk(found);
       }
+      setGroupSelections(
+        selectionsFromIds(resolveSelectedIds(cartItem.customizations, authoritativeGroups), authoritativeGroups)
+      );
       setSpecialInstructions(cartItem.customizations?.specialInstructions || "");
     }
   }, [cartItem]);
@@ -171,15 +221,48 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
     }
   };
 
-  const extraPricePerItem =
-    (!isFood && product.milkOptionsAvailable ? selectedMilk.price : 0) +
-    selectedAddons.reduce((sum, a) => sum + a.price, 0);
+  const toggleGroupOption = (groupId: string, optionId: string, mode: "SINGLE" | "MULTIPLE") => {
+    setGroupSelections((prev) => {
+      const current = prev[groupId] || [];
+      if (mode === "SINGLE") {
+        return { ...prev, [groupId]: current.includes(optionId) ? [] : [optionId] };
+      }
+      return {
+        ...prev,
+        [groupId]: current.includes(optionId) ? current.filter((id) => id !== optionId) : [...current, optionId],
+      };
+    });
+  };
+
+  const selectedOptionIds = Object.values(groupSelections).flat();
+  const selectedOptions = authoritativeGroups
+    .flatMap((g) => g.options)
+    .filter((o) => selectedOptionIds.includes(o.id));
+
+  const extraPricePerItem = isAuthoritative
+    ? selectedOptions.reduce((sum, o) => sum + o.priceModifier, 0)
+    : (!isFood && product.milkOptionsAvailable ? selectedMilk.price : 0) +
+      selectedAddons.reduce((sum, a) => sum + a.price, 0);
 
   const unitPrice = product.price + extraPricePerItem;
   const lineTotal = unitPrice * quantity;
 
   const handleUpdate = () => {
     if (!cartItem) return;
+
+    if (isAuthoritative) {
+      const updatedCustomizations: ItemCustomization = {
+        selectedOptionIds,
+        addOns: selectedOptions.map((o) =>
+          o.priceModifier > 0 ? `${o.name} (+${formatPrice(o.priceModifier)})` : o.name
+        ),
+        specialInstructions: specialInstructions.trim() || undefined,
+      };
+      updateCartItem(cartItem.id, quantity, updatedCustomizations, extraPricePerItem);
+      navigate("/cart");
+      return;
+    }
+
     const updatedCustomizations: ItemCustomization = isFood
       ? {
           addOns: selectedAddons.map((a) => `${a.label} (+${formatPrice(a.price)})`),
@@ -268,26 +351,95 @@ export const EditCartItemPage: React.FC<EditCartItemPageProps> = ({ cartItemId }
             {/* Current customization summary */}
             <div className="mt-1.5 text-[12px] text-[#6B7280] bg-[#F7F9FA] p-2 rounded-xl border border-[#E5E7EB]">
               <span className="font-medium text-[#1F2937]">Current: </span>
-              {!isFood && (
+              {isAuthoritative ? (
+                selectedOptions.length > 0
+                  ? selectedOptions.map((o) => o.name).join(", ")
+                  : "Standard preparation"
+              ) : (
                 <>
-                  {iceLevel !== "Normal" && `${iceLevel} ice, `}
-                  {sweetness && `${sweetness} sugar, `}
-                  {selectedMilk.label !== "Whole Fresh Milk" && `${selectedMilk.label}, `}
+                  {!isFood && (
+                    <>
+                      {iceLevel !== "Normal" && `${iceLevel} ice, `}
+                      {sweetness && `${sweetness} sugar, `}
+                      {selectedMilk.label !== "Whole Fresh Milk" && `${selectedMilk.label}, `}
+                    </>
+                  )}
+                  {selectedAddons.length > 0 && `${selectedAddons.length} add-on(s)`}
+                  {!isFood && selectedAddons.length === 0 && !specialInstructions && 
+                    iceLevel === "Normal" && sweetness === "50%" && selectedMilk.label === "Whole Fresh Milk" && 
+                    "Standard preparation"}
+                  {isFood && selectedAddons.length === 0 && !specialInstructions && "Standard preparation"}
                 </>
               )}
-              {selectedAddons.length > 0 && `${selectedAddons.length} add-on(s)`}
               {specialInstructions && `• "${specialInstructions}"`}
-              {!isFood && selectedAddons.length === 0 && !specialInstructions && 
-                iceLevel === "Normal" && sweetness === "50%" && selectedMilk.label === "Whole Fresh Milk" && 
-                "Standard preparation"}
-              {isFood && selectedAddons.length === 0 && !specialInstructions && "Standard preparation"}
             </div>
           </div>
 
           <div className="border-b border-[#E5E7EB]" />
 
           {/* CUSTOMIZATION OPTIONS */}
-          {isFood ? (
+          {isAuthoritative ? (
+            <div className="space-y-5">
+              {authoritativeGroups.map((grp) => {
+                const selected = groupSelections[grp.groupId] || [];
+                const isSingleGroup = grp.selectionMode === "SINGLE";
+                return (
+                  <div key={grp.groupId} className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-[15px] font-bold text-[#1F2937]">{grp.name}</h2>
+                      <span className="text-[11px] text-[#6B7280]">
+                        {grp.isRequired ? "Required" : isSingleGroup ? "Select 1" : "Optional"}
+                      </span>
+                    </div>
+                    <div className={isSingleGroup ? "grid grid-cols-2 gap-2" : "grid grid-cols-1 sm:grid-cols-2 gap-2"}>
+                      {grp.options.map((opt) => {
+                        const isChecked = selected.includes(opt.id);
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => toggleGroupOption(grp.groupId, opt.id, grp.selectionMode)}
+                            className={`p-3 rounded-2xl border text-[13px] font-medium transition-all flex items-center justify-between px-4 cursor-pointer ${
+                              isChecked
+                                ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
+                                : "border-[#E5E7EB] bg-[#F7F9FA] text-[#1F2937] hover:bg-stone-100"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div
+                                className={`h-4 w-4 rounded-full border flex items-center justify-center ${
+                                  isChecked
+                                    ? "border-[#00A86B] bg-[#00A86B] text-white"
+                                    : "border-[#D1D5DB] bg-white"
+                                }`}
+                              >
+                                {isChecked && <Check className="h-3 w-3 stroke-[3]" />}
+                              </div>
+                              <span>{opt.name}</span>
+                            </div>
+                            {opt.priceModifier > 0 && (
+                              <span className="text-[11px] text-[#6B7280]">+{formatPrice(opt.priceModifier)}</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+
+              <div className="space-y-2">
+                <h2 className="text-[15px] font-bold text-[#1F2937]">Special Notes</h2>
+                <textarea
+                  rows={2}
+                  value={specialInstructions}
+                  onChange={(e) => setSpecialInstructions(e.target.value)}
+                  placeholder="e.g. separate lid, extra straw..."
+                  className="w-full p-3 rounded-2xl border border-[#E5E7EB] bg-[#F7F9FA] text-[13px] text-[#1F2937] focus:bg-white focus:outline-none focus:border-[#00A86B] transition-all resize-none"
+                />
+              </div>
+            </div>
+          ) : isFood ? (
             <div className="space-y-5">
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">

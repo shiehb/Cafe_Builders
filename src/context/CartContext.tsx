@@ -43,7 +43,8 @@ const generateCartItemId = (prefix = "ci") => {
 };
 
 const getCustomizationSig = (prodId: string, cust: ItemCustomization) => {
-  return `${prodId}|${cust.iceLevel || ""}|${cust.sweetness || ""}|${cust.milkOption || ""}|${(
+  const idsKey = (cust.selectedOptionIds || []).slice().sort().join(",");
+  return `${prodId}|${idsKey}|${cust.iceLevel || ""}|${cust.sweetness || ""}|${cust.milkOption || ""}|${(
     cust.addOns || []
   )
     .slice()

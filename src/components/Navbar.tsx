@@ -47,7 +47,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Coffee className="h-4 w-4" />
           </div>
           <span className="font-bold text-[16px] leading-[24px] tracking-tight text-[#1F2937]">
-            Artisan Brew & Kitchen
           </span>
         </div>
 

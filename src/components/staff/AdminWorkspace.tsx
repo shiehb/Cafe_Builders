@@ -340,5 +340,5 @@ function Metric({ label, value, accent = "green" }: { label: string; value: stri
 function Panel({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) { return <section className="bg-white border border-[#E5E7EB] rounded-2xl p-4 sm:p-5 shadow-sm"><div className="flex items-center justify-between gap-3 mb-4"><h3 className="font-black text-lg">{title}</h3>{action}</div>{children}</section>; }
 
 export function AdminWorkspace() {
-  return <StaffGuard pinEnvKey="ADMIN_PIN" title="Store Manager Admin" subtitle="Enter 4-digit PIN to access the management workspace" roleName="Store Manager Terminal" defaultPin="9999"><AdminWorkspaceContent /></StaffGuard>;
+  return <StaffGuard pinEnvKey="ADMIN_PIN" title="Store Manager Admin" subtitle="Enter 4-digit PIN to access the management workspace" roleName="Store Manager Terminal"><AdminWorkspaceContent /></StaffGuard>;
 }

@@ -31,9 +31,8 @@ export const StaffLayout: React.FC<StaffLayoutProps> = ({
   const [livePulse, setLivePulse] = useState<boolean>(true);
 
   const handleLock = () => {
+    // Logs out of the server session and reloads into the PIN gate on completion.
     lockStaffSession(pinEnvKey);
-    // Reload page to trigger StaffGuard lock screen
-    window.location.reload();
   };
 
   return (

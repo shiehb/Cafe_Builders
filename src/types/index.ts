@@ -22,7 +22,43 @@ export interface ItemCustomization {
   sweetness?: "Regular Sweetness" | "Less Sweet" | "Light Sweet" | "No Sugar" | "100%" | "75%" | "50%" | "25%" | "0%" | "50% Sugar" | string;
   milkOption?: string;
   addOns?: string[];
+  /** DB option ids (from the product's customizationGroups) the customer selected. */
+  selectedOptionIds?: string[];
   specialInstructions?: string;
+}
+
+/** Raw option payload as it arrives from the server inside product.customizationGroups. */
+export interface ProductCustomizationOptionData {
+  id: string;
+  groupId: string;
+  name: string;
+  priceModifier: number;
+  isActive: boolean;
+  isArchived?: boolean;
+}
+
+/** Raw group payload as it arrives from the server inside product.customizationGroups. */
+export interface ProductCustomizationGroupData {
+  productId?: string;
+  groupId: string;
+  sortOrder: number;
+  group: {
+    id: string;
+    name: string;
+    selectionMode: "SINGLE" | "MULTIPLE";
+    isRequired: boolean;
+    sortOrder: number;
+    isActive: boolean;
+    isArchived: boolean;
+    options: ProductCustomizationOptionData[];
+  };
+}
+
+/** Raw allowlist payload as it arrives from the server inside product.allowedOptions. */
+export interface ProductAllowedOptionData {
+  productId?: string;
+  optionId: string;
+  option: ProductCustomizationOptionData;
 }
 
 export interface Product {
@@ -55,6 +91,10 @@ export interface Product {
   milkOptions?: CustomizationOption[];
   addonOptions?: CustomizationOption[];
   allowedOptionIds?: string[];
+  /** Raw authoritative customization groups from the server (array when a server product). */
+  customizationGroups?: ProductCustomizationGroupData[];
+  /** Raw authoritative option allowlist from the server (array when a server product). */
+  allowedOptions?: ProductAllowedOptionData[];
   tags?: string[];
 }
 
@@ -148,6 +188,7 @@ export interface CheckoutPayload {
     unitPrice: number;
     quantity: number;
     customizations?: ItemCustomization;
+    selectedOptionIds?: string[];
     subtotal: number;
     notes?: string;
   }[];

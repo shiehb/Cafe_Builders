@@ -23,7 +23,6 @@ export const AdminProductNewPage: React.FC = () => {
       title="Admin Portal Access"
       subtitle="Enter security PIN to create new products"
       roleName="Inventory Manager"
-      defaultPin="9999"
     >
       <AdminProductNewContent />
     </StaffGuard>

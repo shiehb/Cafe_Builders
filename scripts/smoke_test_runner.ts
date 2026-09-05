@@ -3,6 +3,7 @@ import * as catalogService from "../src/services/catalogService";
 import * as inventoryService from "../src/services/inventoryService";
 import * as orderService from "../src/services/orderService";
 import * as adminService from "../src/services/adminService";
+import { createPayMongoQRPhPayment, PayMongoNotConfiguredError } from "../src/lib/paymongo";
 
 const BASE_URL = "http://127.0.0.1:3000";
 
@@ -718,6 +719,134 @@ async function main() {
   }
 
   console.log("\n================================================================================");
+
+  // ---------------------------------------------------------------------------
+  // STEP 11g: F11-A PAYMENT INTEGRITY HARDENING TESTS
+  // ---------------------------------------------------------------------------
+  console.log("
+[STEP 11g] Testing F11-A payment integrity hardening...");
+
+  // -- A1: no silent simulated fallback; explicit failure; simulation gated --
+  {
+    const origSec = process.env.PAYMONGO_SECRET_KEY;
+    const origSim = process.env.PAYMONGO_SIMULATION_ENABLED;
+    const origFetch = globalThis.fetch;
+    const resetF11Env = () => {
+      if (origSec === undefined) delete process.env.PAYMONGO_SECRET_KEY;
+      else process.env.PAYMONGO_SECRET_KEY = origSec;
+      if (origSim === undefined) delete process.env.PAYMONGO_SIMULATION_ENABLED;
+      else process.env.PAYMONGO_SIMULATION_ENABLED = origSim;
+      globalThis.fetch = origFetch;
+    };
+
+    let f11NotConfiguredError = false;
+    process.env.PAYMONGO_SECRET_KEY = "";
+    delete process.env.PAYMONGO_SIMULATION_ENABLED;
+    try {
+      await createPayMongoQRPhPayment(100, "C-F11");
+    } catch (e) {
+      f11NotConfiguredError = e instanceof PayMongoNotConfiguredError;
+    }
+    console.log("F11 (A1) not configured -> explicit PayMongoNotConfiguredError:", f11NotConfiguredError);
+    if (!f11NotConfiguredError) {
+      throw new Error("F11 (A1): no PayMongo key + simulation OFF must throw PayMongoNotConfiguredError");
+    }
+
+    process.env.PAYMONGO_SECRET_KEY = "";
+    process.env.PAYMONGO_SIMULATION_ENABLED = "true";
+    const f11Sim = await createPayMongoQRPhPayment(100, "C-F11");
+    console.log("F11 (A1) sim explicitly enabled: isSimulated =", f11Sim.isSimulated, "intent =", f11Sim.paymentIntentId);
+    if (f11Sim.isSimulated !== true) {
+      throw new Error("F11 (A1): PAYMONGO_SIMULATION_ENABLED=true must yield isSimulated:true");
+    }
+    if (!f11Sim.paymentIntentId.includes("_sim_")) {
+      throw new Error("F11 (A1): simulated intent id must be clearly marked");
+    }
+
+    let f11ProviderFailureThrew = false;
+    process.env.PAYMONGO_SECRET_KEY = "sk_test_f11_provider_failure";
+    delete process.env.PAYMONGO_SIMULATION_ENABLED;
+    globalThis.fetch = (async () => {
+      throw new Error("simulated PayMongo network outage");
+    }) as any;
+    try {
+      await createPayMongoQRPhPayment(100, "C-F11");
+    } catch (e) {
+      f11ProviderFailureThrew = !(e instanceof PayMongoNotConfiguredError);
+    }
+    console.log("F11 (A1) live provider outage -> explicit error (no simulated QR):", f11ProviderFailureThrew);
+    if (!f11ProviderFailureThrew) {
+      throw new Error("F11 (A1): live PayMongo outage must throw, never return a simulated QR");
+    }
+
+    resetF11Env();
+  }
+
+  // -- A2: DB-level unique payment binding --
+  const f11DupIntent = `pi_smoke_f11_dup_${Date.now()}";
+  const f11DupNumber = `C-${7000 + Math.floor(Math.random() * 9000)}";
+  await db.order.create({
+    data: {
+      orderNumber: f11DupNumber,
+      status: "PENDING_PAYMENT",
+      paymentMethod: "QRPH",
+      paymentIntentId: f11DupIntent,
+      orderType: "TAKEAWAY",
+      customerName: "SMOKE_TEST_F11_DUP",
+      subtotal: 10,
+      totalAmount: 10,
+    },
+  });
+  let f11DuplicateRejected = false;
+  try {
+    await db.order.create({
+      data: {
+        orderNumber: `C-${7000 + Math.floor(Math.random() * 9000)}",
+        status: "PENDING_PAYMENT",
+        paymentMethod: "QRPH",
+        paymentIntentId: f11DupIntent,
+        orderType: "TAKEAWAY",
+        customerName: "SMOKE_TEST_F11_DUP",
+        subtotal: 10,
+        totalAmount: 10,
+      },
+    });
+  } catch (e: any) {
+    f11DuplicateRejected = e?.code === "P2002";
+  }
+  console.log("F11 (A2) duplicate paymentIntentId rejected by DB:", f11DuplicateRejected);
+  if (!f11DuplicateRejected) {
+    throw new Error("F11 (A2): duplicate non-null paymentIntentId must be rejected by the DB unique index");
+  }
+
+  // -- A3: unsigned webhook policy --
+  const f11gUnsigned = await fetch(`${BASE_URL}/api/webhooks/paymongo", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      data: {
+        id: "evt_f11g_unsigned",
+        attributes: {
+          type: "payment.paid",
+          data: { id: "pay_f11g", attributes: { amount: 1, status: "paid", payment_intent_id: "pi_f11g_unsigned" } },
+        },
+      },
+    });
+  };
+  const f11gUnsignedStatus = f11gUnsigned.status;
+  const f11gUnsignedJson = await f11gUnsigned.json().catch(() => ({}));
+  console.log("F11 (A3) unsigned webhook:", f11gUnsignedStatus, JSON.stringify(f11gUnsignedJson));
+
+  const f11gOverrideOn = process.env.PAYMONGO_ALLOW_UNSIGNED_WEBHOOKS_DEV === "true";
+  if (f11gOverrideOn) {
+    console.log("F11 (A3) NOTE: dev unsigned override is ON in this environment; unsigned acceptance is intentional, skipping rejection assertion.");
+  } else {
+    if (![401, 503].includes(f11gUnsignedStatus)) {
+      throw new Error(`F11 (A3): unsigned webhook must be rejected (401 with secret / 503 fail-closed), got ${f11gUnsignedStatus}`);
+    }
+  }
+
+  console.log("STEP 11g F11-A PAYMENT INTEGRITY HARDENING TESTS PASSED");
   console.log("ALL PHASE 3 SMOKE TESTS COMPLETED SUCCESSFULLY WITH ZERO ERRORS!");
   console.log("================================================================================");
 }

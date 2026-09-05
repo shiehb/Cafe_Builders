@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { ChevronLeft, Check, Minus, Plus, AlertCircle } from "lucide-react";
-import { Product, ItemCustomization } from "../types";
+import { Product, ItemCustomization, ProductCustomizationOptionData } from "../types";
 import { PRODUCTS } from "../data/menuData";
 import { formatPrice } from "../lib/utils";
 import { navigate } from "../lib/router";
@@ -60,6 +60,67 @@ export const isFoodCategory = (prod: Product | null | undefined): boolean => {
   );
 };
 
+export interface SelectableOption {
+  id: string;
+  name: string;
+  priceModifier: number;
+}
+
+export interface SelectableGroup {
+  groupId: string;
+  name: string;
+  selectionMode: "SINGLE" | "MULTIPLE";
+  isRequired: boolean;
+  options: SelectableOption[];
+}
+
+/**
+ * Derives the authoritative selectable groups for a product from the raw
+ * server payload (customizationGroups + allowedOptions). Only active,
+ * non-archived groups and options are returned. When a group's allowlist is
+ * non-empty, only allowlisted options are shown; otherwise all linked-group
+ * options are shown. Returns [] when the server payload is absent
+ * (offline/static product -> caller falls back to legacy arrays).
+ */
+export const deriveSelectableGroups = (product: Product | null | undefined): SelectableGroup[] => {
+  if (!product) return [];
+  const rawGroups = Array.isArray(product.customizationGroups)
+    ? [...product.customizationGroups].sort((a, b) => a.sortOrder - b.sortOrder)
+    : [];
+  if (!Array.isArray(product.customizationGroups)) return [];
+
+  const allowlist = new Map<string, ProductCustomizationOptionData>();
+  if (Array.isArray(product.allowedOptions)) {
+    for (const entry of product.allowedOptions) {
+      if (!entry.option) continue;
+      if (entry.option.isArchived || entry.option.isActive === false) continue;
+      allowlist.set(entry.optionId, entry.option);
+    }
+  }
+
+  const groups: SelectableGroup[] = [];
+  for (const wrapper of rawGroups) {
+    const group = wrapper.group;
+    if (!group) continue;
+    if (group.isActive === false || group.isArchived) continue;
+
+    const options = (group.options || [])
+      .filter((o) => o.isActive !== false && !o.isArchived)
+      .map((o) => ({ id: o.id, name: o.name, priceModifier: o.priceModifier || 0 }));
+
+    const finalOptions = allowlist.size > 0 ? options.filter((o) => allowlist.has(o.id)) : options;
+
+    groups.push({
+      groupId: wrapper.groupId || group.id,
+      name: group.name,
+      selectionMode: group.selectionMode === "SINGLE" ? "SINGLE" : "MULTIPLE",
+      isRequired: !!group.isRequired,
+      options: finalOptions,
+    });
+  }
+  return groups;
+};
+
 interface ItemCustomizationPageProps {
   productId: string;
 }
@@ -79,6 +140,8 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
   const [selectedMilk, setSelectedMilk] = useState(MILK_OPTIONS[0]);
   const [selectedAddons, setSelectedAddons] = useState<{ label: string; price: number }[]>([]);
   const [specialInstructions, setSpecialInstructions] = useState<string>("");
+  const [groupSelections, setGroupSelections] = useState<Record<string, string[]>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Scroll listener: Header shows product name when scrolled past hero
   useEffect(() => {
@@ -158,6 +221,11 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
   const milkOptions = product.milkOptions?.length ? product.milkOptions : DEFAULT_MILK_OPTIONS;
   const beverageAddons = product.addonOptions?.length ? product.addonOptions : DEFAULT_BEVERAGE_ADDONS;
 
+  /** True when the server delivered authoritative raw customization data.
+   *  Static menuData products (customizationGroups undefined) fall back to legacy. */
+  const isAuthoritative = Array.isArray(product.customizationGroups);
+  const authoritativeGroups = deriveSelectableGroups(product);
+
   const toggleAddon = (addon: { label: string; price: number }) => {
     if (selectedAddons.some((a) => a.label === addon.label)) {
       setSelectedAddons(selectedAddons.filter((a) => a.label !== addon.label));
@@ -166,15 +234,62 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
     }
   };
 
-  const extraPricePerItem =
-    (!isFood && hasGroup("milk") ? selectedMilk.price : 0) +
-    (hasGroup("addons") ? selectedAddons.reduce((sum, a) => sum + a.price, 0) : 0);
+  const toggleGroupOption = (groupId: string, optionId: string, mode: "SINGLE" | "MULTIPLE") => {
+    setSubmitError(null);
+    setGroupSelections((prev) => {
+      const current = prev[groupId] || [];
+      if (mode === "SINGLE") {
+        return { ...prev, [groupId]: current.includes(optionId) ? [] : [optionId] };
+      }
+      return {
+        ...prev,
+        [groupId]: current.includes(optionId) ? current.filter((id) => id !== optionId) : [...current, optionId],
+      };
+    });
+  };
+
+  const selectedOptionIds = Object.values(groupSelections).flat();
+
+  const extraPricePerItem = isAuthoritative
+    ? authoritativeGroups
+        .flatMap((g) => g.options)
+        .filter((o) => selectedOptionIds.includes(o.id))
+        .reduce((sum, o) => sum + o.priceModifier, 0)
+    : (!isFood && hasGroup("milk") ? selectedMilk.price : 0) +
+      (hasGroup("addons") ? selectedAddons.reduce((sum, a) => sum + a.price, 0) : 0);
 
   const unitPrice = product.price + extraPricePerItem;
   const lineTotal = unitPrice * quantity;
 
   const handleAdd = () => {
     if (isSoldOut) return;
+
+    if (isAuthoritative) {
+      const missingRequired = authoritativeGroups.find(
+        (g) => g.isRequired && (groupSelections[g.groupId]?.length ?? 0) === 0
+      );
+      if (missingRequired) {
+        setSubmitError(`Please select an option for "${missingRequired.name}".`);
+        return;
+      }
+      const optionRecord = new Map<string, { name: string; priceModifier: number }>();
+      for (const g of authoritativeGroups) {
+        for (const o of g.options) optionRecord.set(o.id, o);
+      }
+      const addOns = selectedOptionIds
+        .map((id) => optionRecord.get(id))
+        .filter((o): o is { name: string; priceModifier: number } => !!o)
+        .map((o) => (o.priceModifier > 0 ? `${o.name} (+${formatPrice(o.priceModifier)})` : o.name));
+
+      const customizations: ItemCustomization = {
+        selectedOptionIds,
+        addOns,
+        specialInstructions: specialInstructions.trim() || undefined,
+      };
+      addToCart(product, quantity, customizations, extraPricePerItem);
+      navigate("/cart");
+      return;
+    }
 
     const customizations: ItemCustomization = isFood
       ? {
@@ -286,6 +401,74 @@ export const ItemCustomizationPage: React.FC<ItemCustomizationPageProps> = ({ pr
               >
                 Back to Menu
               </button>
+            </div>
+          ) : isAuthoritative ? (
+            <div className="space-y-5">
+              {authoritativeGroups.map((grp) => {
+                const selected = groupSelections[grp.groupId] || [];
+                const isSingleGroup = grp.selectionMode === "SINGLE";
+                return (
+                  <div key={grp.groupId} className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-[15px] font-bold text-[#1F2937]">{grp.name}</h2>
+                      <span className="text-[11px] text-[#6B7280]">
+                        {grp.isRequired ? "Required" : isSingleGroup ? "Select 1" : "Optional"}
+                      </span>
+                    </div>
+                    <div className={isSingleGroup ? "grid grid-cols-2 gap-2" : "grid grid-cols-1 sm:grid-cols-2 gap-2"}>
+                      {grp.options.map((opt) => {
+                        const isChecked = selected.includes(opt.id);
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => toggleGroupOption(grp.groupId, opt.id, grp.selectionMode)}
+                            className={`p-3 rounded-2xl border text-[13px] font-medium transition-all flex items-center justify-between px-4 cursor-pointer ${
+                              isChecked
+                                ? "border-[#00A86B] bg-[#E6F6F0] text-[#00A86B] font-bold"
+                                : "border-[#E5E7EB] bg-[#F7F9FA] text-[#1F2937] hover:bg-stone-100"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div
+                                className={`h-4 w-4 rounded-full border flex items-center justify-center ${
+                                  isChecked
+                                    ? "border-[#00A86B] bg-[#00A86B] text-white"
+                                    : "border-[#D1D5DB] bg-white"
+                                }`}
+                              >
+                                {isChecked && <Check className="h-3 w-3 stroke-[3]" />}
+                              </div>
+                              <span>{opt.name}</span>
+                            </div>
+                            {opt.priceModifier > 0 && (
+                              <span className="text-[11px] text-[#6B7280]">+{formatPrice(opt.priceModifier)}</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {submitError && (
+                <div className="flex items-center gap-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[12px] font-semibold p-3">
+                  <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+                  <span>{submitError}</span>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <h2 className="text-[15px] font-bold text-[#1F2937]">Special Notes</h2>
+                <textarea
+                  rows={2}
+                  value={specialInstructions}
+                  onChange={(e) => setSpecialInstructions(e.target.value)}
+                  placeholder="e.g. separate lid, extra straw..."
+                  className="w-full p-3 rounded-2xl border border-[#E5E7EB] bg-[#F7F9FA] text-[13px] text-[#1F2937] focus:bg-white focus:outline-none focus:border-[#00A86B] transition-all resize-none"
+                />
+              </div>
             </div>
           ) : isFood ? (
             <div className="space-y-5">
