@@ -22,6 +22,7 @@ import {
   inventoryService,
   orderService,
   adminService,
+  roundMoney,
 } from "./src/services";
 
 dotenv.config();
@@ -776,7 +777,10 @@ app.patch("/api/admin/products/:id", async (req, res) => {
 // CHECKOUT & ORDER PIPELINE (AUTHORITATIVE PRISMA ORDER SERVICE)
 // ==============================================================================
 
-async function processCheckout(body: CheckoutPayload) {
+async function processCheckout(
+  body: CheckoutPayload,
+  staffContext?: { allowed: boolean; role: string | null }
+) {
   const { items, customerName, orderType = "DINE_IN", paymentMethod, notes } = body;
 
   if (!items || items.length === 0) {
@@ -947,6 +951,48 @@ async function processCheckout(body: CheckoutPayload) {
     createdOrder.paymentMethodId = paymentMethodId;
   }
 
+  let changeDue: number | undefined;
+  let cashTenderedAmount: number | undefined;
+
+  // P1: POS Walk-in Cash Checkout
+  // Authenticated cashier/admin provides cashTendered >= authoritative server total.
+  // The server validates the amount and uses orderService.recordPayment() to mark PAID.
+  if (
+    paymentMethod !== "QRPH" &&
+    staffContext?.allowed &&
+    body.cashTendered !== undefined
+  ) {
+    const rawCash = Number(body.cashTendered);
+    if (isNaN(rawCash) || rawCash <= 0) {
+      await db.order.delete({ where: { id: createdOrder.id } }).catch(() => {});
+      throw new AppError(400, "INVALID_CASH_TENDERED", "cashTendered must be a positive number");
+    }
+
+    const orderTotalCents = Math.round(Number(createdOrder.totalAmount) * 100);
+    const cashTenderedCents = Math.round(rawCash * 100);
+
+    if (cashTenderedCents < orderTotalCents) {
+      await db.order.delete({ where: { id: createdOrder.id } }).catch(() => {});
+      throw new AppError(
+        400,
+        "INSUFFICIENT_CASH",
+        `Insufficient cash tendered. Total is ₱${Number(createdOrder.totalAmount).toFixed(2)}, received ₱${rawCash.toFixed(2)}`
+      );
+    }
+
+    const paidOrder = await orderService.recordPayment({
+      idOrOrderNumber: createdOrder.id,
+      status: "PAID",
+      enforcePendingPayment: true,
+    });
+    createdOrder = paidOrder;
+    changeDue = roundMoney((cashTenderedCents - orderTotalCents) / 100);
+    cashTenderedAmount = roundMoney(rawCash);
+
+    // Broadcast order_paid to KDS
+    await broadcastRealtime("order_paid", paidOrder as any);
+  }
+
   // Broadcast realtime order_created to Kitchen KDS and customer live stream.
   // R2: unpaid PENDING_PAYMENT tickets are NEVER announced to the kitchen —
   // only the order's later order_paid/status events (broadcast on payment
@@ -964,11 +1010,16 @@ async function processCheckout(body: CheckoutPayload) {
       success: true,
       orderNumber: createdOrder.orderNumber,
       order: createdOrder,
+      status: createdOrder.status,
       qrCodeUrl: createdOrder.qrCodeUrl,
       paymentIntentId: createdOrder.paymentIntentId,
+      changeDue,
+      cashTendered: cashTenderedAmount,
       message:
         paymentMethod === "QRPH"
           ? "Dynamic QR Ph generated. Scan using any QR Ph compliant app."
+          : createdOrder.status === "PAID"
+          ? `Order #${createdOrder.orderNumber} paid in cash. Change due: ₱${(changeDue ?? 0).toFixed(2)}.`
           : `Order #${createdOrder.orderNumber} registered. Please proceed to payment counter.`,
     },
   };
@@ -977,10 +1028,19 @@ async function processCheckout(body: CheckoutPayload) {
 // 4. Checkout API
 app.post("/api/checkout", async (req, res) => {
   try {
-    const result = await processCheckout(req.body);
+    const staffContext = requireRole(req, ["pos", "admin"]);
+    const result = await processCheckout(req.body, staffContext);
     return res.status(result.status).json(result.payload);
   } catch (error: any) {
     console.error("Error in /api/checkout:", error);
+    if (error instanceof AppError) {
+      return res.status(error.status).json({
+        success: false,
+        code: error.code,
+        error: error.message,
+        message: error.message,
+      });
+    }
     const msg = error?.message || "Internal server error during checkout";
     if (msg.includes("sold out") || msg.includes("no longer available")) {
       return res.status(409).json({
@@ -1007,13 +1067,22 @@ app.post("/api/orders", async (req, res) => {
       return res.status(409).json({ success: false, code: "DUPLICATE_REQUEST", message: "This order request has already been processed.", order: existingOrder });
     }
 
-    const result = await processCheckout(req.body);
+    const staffContext = requireRole(req, ["pos", "admin"]);
+    const result = await processCheckout(req.body, staffContext);
     if (result.order?.id) {
       orderIdempotencyStore.set(idempotencyKey, result.order.id);
     }
     return res.status(result.status).json(result.payload);
   } catch (error: any) {
     console.error("Error in /api/orders:", error);
+    if (error instanceof AppError) {
+      return res.status(error.status).json({
+        success: false,
+        code: error.code,
+        error: error.message,
+        message: error.message,
+      });
+    }
     const msg = error?.message || "Internal server error during order creation";
     if (msg.includes("sold out") || msg.includes("no longer available")) {
       return res.status(409).json({
@@ -1039,6 +1108,7 @@ app.get("/api/orders", async (req, res) => {
     const list = await orderService.listOrders({
       status: req.query.status as any,
       excludeStatus: excludeStatus.length ? excludeStatus : undefined,
+      paymentMethod: req.query.paymentMethod as any,
       orderType: req.query.orderType as any,
     });
     res.json({ data: list });
@@ -1115,6 +1185,129 @@ app.patch("/api/orders/:id/status", async (req, res) => {
       return res.status(error.status).json({ error: error.message, code: error.code });
     }
     return res.status(500).json({ error: error?.message || "Failed to update order status" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// P1: Cashier Cash Payment Confirmation
+// Endpoint: POST /api/orders/:id/pay-cash
+// Workflow: Customer Pay-at-Cashier / Counter Cash Tender
+// Authenticated cashier/admin receives cash, validates cashTendered >= order.totalAmount,
+// and records payment via orderService.recordPayment().
+// ---------------------------------------------------------------------------
+app.post("/api/orders/:id/pay-cash", async (req, res) => {
+  const { allowed, role } = requireRole(req, ["pos", "admin"]);
+
+  if (role === null) {
+    return res.status(401).json({
+      error: "Unauthorized: Invalid or missing staff session credentials",
+      code: "AUTH_REQUIRED",
+      message: "Please enter your 4-digit PIN to authenticate this session.",
+    });
+  }
+
+  if (!allowed) {
+    return res.status(403).json({
+      error: "Insufficient role: cashier/admin access required",
+      code: "FORBIDDEN_ROLE",
+      message: "Your session role does not permit cashier payment confirmation.",
+    });
+  }
+
+  const { id } = req.params;
+
+  try {
+    const order = await orderService.getOrderById(id);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        code: "ORDER_NOT_FOUND",
+        error: `Order '${id}' not found`,
+        message: `Order '${id}' not found`,
+      });
+    }
+
+    // Cash tender endpoint must reject non-CASH orders
+    if (order.paymentMethod !== "CASH") {
+      return res.status(400).json({
+        success: false,
+        code: "NON_CASH_ORDER",
+        error: `Only CASH orders can be tendered at the cashier (current payment method: ${order.paymentMethod})`,
+        message: `Only CASH orders can be tendered at the cashier (current payment method: ${order.paymentMethod})`,
+      });
+    }
+
+    // Double-tender / already paid guard:
+    if (order.status !== "PENDING_PAYMENT") {
+      return res.status(409).json({
+        success: false,
+        code: "ORDER_ALREADY_PAID",
+        error: `Order #${order.orderNumber} has already been paid or processed (current status: ${order.status})`,
+        message: `Order #${order.orderNumber} has already been paid or processed (current status: ${order.status})`,
+        order,
+      });
+    }
+
+    // Cent-level money comparison
+    const rawCashTendered = req.body?.cashTendered;
+    const cashTendered = Number(rawCashTendered);
+    if (isNaN(cashTendered) || cashTendered <= 0) {
+      return res.status(400).json({
+        success: false,
+        code: "INVALID_CASH_TENDERED",
+        error: "cashTendered must be a positive number",
+        message: "Please provide a valid cash tendered amount.",
+      });
+    }
+
+    const orderTotalCents = Math.round(Number(order.totalAmount) * 100);
+    const cashTenderedCents = Math.round(cashTendered * 100);
+
+    if (cashTenderedCents < orderTotalCents) {
+      return res.status(400).json({
+        success: false,
+        code: "INSUFFICIENT_CASH",
+        error: `Insufficient cash tendered. Total is ₱${Number(order.totalAmount).toFixed(2)}, received ₱${cashTendered.toFixed(2)}`,
+        message: `Insufficient cash tendered. Total is ₱${Number(order.totalAmount).toFixed(2)}, received ₱${cashTendered.toFixed(2)}`,
+        totalAmount: order.totalAmount,
+        cashTendered: roundMoney(cashTendered),
+      });
+    }
+
+    // Authoritative state transition via orderService.recordPayment with atomic guard
+    const updatedOrder = await orderService.recordPayment({
+      idOrOrderNumber: order.id,
+      status: "PAID",
+      enforcePendingPayment: true,
+    });
+
+    const changeDue = roundMoney((cashTenderedCents - orderTotalCents) / 100);
+
+    // Broadcast order_paid only after successful payment (making it visible to KDS)
+    await broadcastRealtime("order_paid", updatedOrder as any);
+
+    return res.status(200).json({
+      success: true,
+      order: updatedOrder,
+      status: "PAID",
+      cashTendered: roundMoney(cashTendered),
+      changeDue,
+      message: `Payment confirmed for Order #${updatedOrder.orderNumber}. Change due: ₱${changeDue.toFixed(2)}.`,
+    });
+  } catch (error: any) {
+    console.error(`Failed to tender cash for order ${id}:`, error);
+    if (error instanceof AppError) {
+      return res.status(error.status).json({
+        success: false,
+        code: error.code,
+        error: error.message,
+        message: error.message,
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      error: error?.message || "Failed to tender cash payment",
+    });
   }
 });
 

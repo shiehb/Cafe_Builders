@@ -7,9 +7,10 @@ import {
   CheckCircle2,
   QrCode,
   RefreshCw,
+  Banknote,
 } from "lucide-react";
 import { Order } from "../types";
-import { formatPrice, formatDateTime } from "../lib/utils";
+import { formatPrice, formatDateTime, cn } from "../lib/utils";
 import { navigate } from "../lib/router";
 import { useCart } from "../context/CartContext";
 import { useOrderRealtime } from "../lib/realtime";
@@ -107,6 +108,28 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
   // Determine status label and header
   const getStatusInfo = () => {
     switch (order.status) {
+      case "PENDING_PAYMENT":
+        if (order.paymentMethod === "CASH") {
+          return {
+            title: "Pay at Cashier Counter",
+            badgeLabel: "Awaiting Cash Payment",
+            estimate: "Proceed to Cashier",
+            icon: Banknote,
+          };
+        }
+        return {
+          title: "Scan & Pay via QR Ph",
+          badgeLabel: "Awaiting QR Payment",
+          estimate: "Scan QR below",
+          icon: Clock,
+        };
+      case "PAID":
+        return {
+          title: "Payment Confirmed",
+          badgeLabel: "Paid & Sent to Kitchen",
+          estimate: "Queued for Prep",
+          icon: CheckCircle2,
+        };
       case "PREPARING":
         return {
           title: "Preparing your order",
@@ -294,6 +317,89 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
                     </span>
                     <span className="text-[11px] text-[#6B7280] block truncate">
                       {order.paymentIntentId ? `Ref: ${order.paymentIntentId}` : "Paid via QR Ph"} • Handcrafted preparation in progress
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* CASH PAYMENT SECTION */}
+          {order.paymentMethod === "CASH" && (
+            <div
+              className={cn(
+                "rounded-2xl border-2 p-4 sm:p-5 space-y-3.5",
+                order.status === "PENDING_PAYMENT"
+                  ? "border-amber-500/30 bg-amber-50/50"
+                  : "border-emerald-500/30 bg-[#F0FDF4]/50"
+              )}
+            >
+              <div
+                className={cn(
+                  "flex items-center justify-between border-b pb-3",
+                  order.status === "PENDING_PAYMENT" ? "border-amber-200/60" : "border-emerald-200/60"
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <div
+                    className={cn(
+                      "h-8 w-8 rounded-xl flex items-center justify-center font-bold shadow-xs",
+                      order.status === "PENDING_PAYMENT"
+                        ? "bg-amber-600 text-white"
+                        : "bg-[#00A86B] text-white"
+                    )}
+                  >
+                    <Banknote className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <span className="text-[13px] font-bold text-[#1F2937] block leading-tight">
+                      Cash Payment at Counter
+                    </span>
+                    <span className="text-[10px] text-[#6B7280] block">
+                      Pay in Philippine Peso (PHP)
+                    </span>
+                  </div>
+                </div>
+
+                {order.status === "PENDING_PAYMENT" ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-bold">
+                    <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
+                    Waiting for Cashier
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-[#00A86B] border border-emerald-300 text-[11px] font-bold">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Paid & Received
+                  </span>
+                )}
+              </div>
+
+              {order.status === "PENDING_PAYMENT" ? (
+                <div className="space-y-3 py-1">
+                  <div className="bg-white rounded-xl p-4 border border-amber-200 text-center space-y-2">
+                    <span className="text-[11px] uppercase tracking-wider font-bold text-amber-800">
+                      Amount to Pay at Counter
+                    </span>
+                    <div className="text-2xl font-mono font-black text-[#1F2937]">
+                      {formatPrice(order.totalAmount)}
+                    </div>
+                    <p className="text-xs text-[#4B5563] leading-relaxed max-w-md mx-auto">
+                      Please proceed to the cashier counter and present your order number{" "}
+                      <strong className="font-mono text-amber-900 font-bold">#{order.orderNumber}</strong>. Once the cashier records your cash, your order will immediately be sent to the kitchen.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl p-3 border border-emerald-200 flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-emerald-100 text-[#00A86B] flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[12px] font-bold text-[#1F2937] block">
+                      Cash Payment Confirmed
+                    </span>
+                    <span className="text-[11px] text-[#6B7280] block">
+                      Cashier confirmed receipt of {formatPrice(order.totalAmount)} • Kitchen ticket is now active
                     </span>
                   </div>
                 </div>

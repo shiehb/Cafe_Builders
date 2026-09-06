@@ -308,6 +308,7 @@ export interface CreateOrderInput {
 export interface ListOrdersOptions {
   status?: OrderStatus;
   excludeStatus?: OrderStatus[]; // e.g. KDS hides PENDING_PAYMENT
+  paymentMethod?: PaymentMethod;
   limit?: number;
   orderType?: OrderType;
 }

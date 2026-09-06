@@ -476,6 +476,9 @@ export async function listOrders(options?: ListOrdersOptions): Promise<OrderDto[
   if (options?.excludeStatus?.length) {
     where.status = { notIn: options.excludeStatus };
   }
+  if (options?.paymentMethod) {
+    where.paymentMethod = options.paymentMethod;
+  }
   if (options?.orderType) {
     where.orderType = options.orderType;
   }
@@ -565,12 +568,51 @@ export async function recordPayment(input: {
   paymentIntentId?: string;
   paymentMethodId?: string;
   status?: OrderStatus;
+  enforcePendingPayment?: boolean;
 }): Promise<OrderDto> {
   const db = getDb();
 
   const existing = await fetchDbOrderFull(input.idOrOrderNumber);
   if (!existing) {
     throw new AppError(404, "ORDER_NOT_FOUND", `Order '${input.idOrOrderNumber}' not found`);
+  }
+
+  // P1: When enforcePendingPayment is requested (e.g. cashier cash tender),
+  // verify the order is currently PENDING_PAYMENT. If already paid, reject with
+  // HTTP 409 ORDER_ALREADY_PAID to prevent double-tendering or drawer imbalances.
+  if (input.enforcePendingPayment) {
+    if (existing.status !== "PENDING_PAYMENT") {
+      throw new AppError(
+        409,
+        "ORDER_ALREADY_PAID",
+        `Order '${existing.orderNumber}' has already been paid or processed (current status: ${existing.status})`
+      );
+    }
+
+    // Atomic update guard: ensures concurrent tender requests cannot both succeed
+    const updateResult = await db.order.updateMany({
+      where: {
+        id: existing.id,
+        status: "PENDING_PAYMENT",
+      },
+      data: {
+        status: "PAID",
+        paidAt: existing.paidAt ?? new Date(),
+        paymentIntentId: input.paymentIntentId || existing.paymentIntentId,
+        paymentMethodId: input.paymentMethodId || existing.paymentMethodId,
+      },
+    });
+
+    if (updateResult.count === 0) {
+      throw new AppError(
+        409,
+        "ORDER_ALREADY_PAID",
+        `Order '${existing.orderNumber}' has already been paid or processed concurrently`
+      );
+    }
+
+    const reloaded = await fetchDbOrderFull(existing.id);
+    return mapOrderToDto(reloaded!);
   }
 
   const targetStatus: OrderStatus = input.status ?? "PAID";

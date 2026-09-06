@@ -1020,6 +1020,274 @@ async function main() {
     console.log(`Removed ${f11gOrderIds.length} F11 control order(s) for clean end state.`);
   }
 
+  // ---------------------------------------------------------------------------
+  // STEP 11h: P1 CASHIER PAYMENT CONFIRMATION TESTS
+  // ---------------------------------------------------------------------------
+  console.log("\n[STEP 11h] Testing P1 Cashier Payment Confirmation...");
+
+  const sampleProduct = await db.product.findFirst({ where: { isAvailable: true } });
+  if (!sampleProduct) {
+    throw new Error("P1 Smoke: No available product found in database for checkout test");
+  }
+
+  // P1-1: Customer Pay-at-Cashier order creation (unauthenticated)
+  console.log("P1-1: Testing unauthenticated customer pay-at-cashier checkout...");
+  const p1CustomerOrderRes = await fetch(`${BASE_URL}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      customerName: "SMOKE_TEST_P1_Customer_Cash",
+      orderType: "DINE_IN",
+      paymentMethod: "CASH",
+      items: [{ productId: sampleProduct.id, quantity: 1 }],
+    }),
+  });
+  if (!p1CustomerOrderRes.ok) {
+    throw new Error(`P1-1 failed: customer cash checkout returned ${p1CustomerOrderRes.status}`);
+  }
+  const p1CustomerOrderJson = await p1CustomerOrderRes.json();
+  const p1Order1 = p1CustomerOrderJson.order || p1CustomerOrderJson;
+  console.log("P1-1 Customer order created:", p1Order1.id, "status:", p1Order1.status, "method:", p1Order1.paymentMethod);
+  if (p1Order1.status !== "PENDING_PAYMENT") {
+    throw new Error(`P1-1: Customer cash order must start as PENDING_PAYMENT, got ${p1Order1.status}`);
+  }
+  if (p1Order1.paymentMethod !== "CASH") {
+    throw new Error(`P1-1: Order paymentMethod must be CASH, got ${p1Order1.paymentMethod}`);
+  }
+
+  // P1-2: Non-CASH order rejection on /api/orders/:id/pay-cash
+  console.log("P1-2: Testing non-CASH order rejection on /pay-cash...");
+  const p1QrOrder = await db.order.create({
+    data: {
+      orderNumber: `C-${8000 + Math.floor(Math.random() * 1000)}`,
+      status: "PENDING_PAYMENT",
+      paymentMethod: "QRPH",
+      paymentIntentId: `pi_smoke_p1_noncash_${Date.now()}`,
+      orderType: "TAKEAWAY",
+      customerName: "SMOKE_TEST_P1_NONCASH",
+      subtotal: sampleProduct.price,
+      totalAmount: sampleProduct.price,
+    },
+  });
+  const p1NonCashRes = await fetch(`${BASE_URL}/api/orders/${p1QrOrder.id}/pay-cash`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ cashTendered: Number(sampleProduct.price) + 50 }),
+  });
+  console.log("P1-2 non-CASH pay-cash response status:", p1NonCashRes.status);
+  if (p1NonCashRes.status !== 400) {
+    throw new Error(`P1-2: /pay-cash on non-CASH order must return 400, got ${p1NonCashRes.status}`);
+  }
+  const p1NonCashJson = await p1NonCashRes.json().catch(() => ({}));
+  if (p1NonCashJson.code !== "NON_CASH_ORDER") {
+    throw new Error(`P1-2: /pay-cash on non-CASH order must return error code NON_CASH_ORDER, got ${JSON.stringify(p1NonCashJson)}`);
+  }
+
+  // P1-3: Cash tendered validation on pay-cash
+  console.log("P1-3: Testing cash tendered validation (insufficient cash)...");
+  const p1InsufficientRes = await fetch(`${BASE_URL}/api/orders/${p1Order1.id}/pay-cash`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ cashTendered: Number(p1Order1.totalAmount) - 0.01 }),
+  });
+  console.log("P1-3 insufficient cash status:", p1InsufficientRes.status);
+  if (p1InsufficientRes.status !== 400) {
+    throw new Error(`P1-3: insufficient cash must return 400, got ${p1InsufficientRes.status}`);
+  }
+  const p1InsufficientJson = await p1InsufficientRes.json().catch(() => ({}));
+  if (p1InsufficientJson.code !== "INSUFFICIENT_CASH") {
+    throw new Error(`P1-3: error must be INSUFFICIENT_CASH, got ${JSON.stringify(p1InsufficientJson)}`);
+  }
+
+  // P1-4: Unauthenticated cash tender rejection
+  console.log("P1-4: Testing unauthenticated pay-cash rejection...");
+  const p1UnauthRes = await fetch(`${BASE_URL}/api/orders/${p1Order1.id}/pay-cash`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cashTendered: Number(p1Order1.totalAmount) + 50 }),
+  });
+  console.log("P1-4 unauthenticated pay-cash status:", p1UnauthRes.status);
+  if (p1UnauthRes.status !== 401) {
+    throw new Error(`P1-4: unauthenticated pay-cash must return 401, got ${p1UnauthRes.status}`);
+  }
+
+  // P1-5: Successful cash tender (Customer Pay-at-Cashier)
+  console.log("P1-5: Testing successful cash tender...");
+  const tenderAmount = Number(p1Order1.totalAmount) + 50;
+  const p1TenderRes = await fetch(`${BASE_URL}/api/orders/${p1Order1.id}/pay-cash`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ cashTendered: tenderAmount }),
+  });
+  if (!p1TenderRes.ok) {
+    const errText = await p1TenderRes.text();
+    throw new Error(`P1-5: pay-cash failed: status ${p1TenderRes.status}, ${errText}`);
+  }
+  const p1TenderJson = await p1TenderRes.json();
+  console.log("P1-5 tender response:", p1TenderJson);
+  if (p1TenderJson.order.status !== "PAID") {
+    throw new Error(`P1-5: pay-cash must return order status PAID, got ${p1TenderJson.order.status}`);
+  }
+  const expectedChange = Math.round((tenderAmount - Number(p1Order1.totalAmount)) * 100) / 100;
+  if (Math.abs(p1TenderJson.changeDue - expectedChange) > 0.001) {
+    throw new Error(`P1-5: changeDue mismatch: expected ${expectedChange}, got ${p1TenderJson.changeDue}`);
+  }
+  const p1DbOrder = await db.order.findUnique({ where: { id: p1Order1.id } });
+  if (p1DbOrder?.status !== "PAID") {
+    throw new Error(`P1-5: DB order status must be PAID, found ${p1DbOrder?.status}`);
+  }
+
+  // P1-6: Concurrency / double-tender protection (Atomic guard)
+  console.log("P1-6: Testing double-tender atomic protection on already paid order...");
+  const p1DoubleTenderRes = await fetch(`${BASE_URL}/api/orders/${p1Order1.id}/pay-cash`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ cashTendered: tenderAmount }),
+  });
+  console.log("P1-6 double-tender response status:", p1DoubleTenderRes.status);
+  if (p1DoubleTenderRes.status !== 409) {
+    throw new Error(`P1-6: double tender must return 409, got ${p1DoubleTenderRes.status}`);
+  }
+  const p1DoubleJson = await p1DoubleTenderRes.json().catch(() => ({}));
+  if (p1DoubleJson.code !== "ORDER_ALREADY_PAID") {
+    throw new Error(`P1-6: double tender error must be ORDER_ALREADY_PAID, got ${JSON.stringify(p1DoubleJson)}`);
+  }
+
+  // P1-7: POS Walk-in Cash Order Creation
+  console.log("P1-7: Testing POS walk-in cash order creation...");
+  const p1WalkinFailRes = await fetch(`${BASE_URL}/api/orders`, {
+    method: "POST",
+    headers: {
+      ...adminHeaders,
+      "Idempotency-Key": `smoke_pos_fail_${Date.now()}`,
+    },
+    body: JSON.stringify({
+      customerName: "SMOKE_TEST_P1_POS_Walkin_Fail",
+      orderType: "TAKEAWAY",
+      paymentMethod: "CASH",
+      cashTendered: Number(sampleProduct.price) - 10,
+      items: [{ productId: sampleProduct.id, quantity: 1 }],
+    }),
+  });
+  console.log("P1-7 insufficient walk-in cash status:", p1WalkinFailRes.status);
+  if (p1WalkinFailRes.status !== 400) {
+    throw new Error(`P1-7: POS walk-in with insufficient cash must return 400, got ${p1WalkinFailRes.status}`);
+  }
+  const p1WalkinFailJson = await p1WalkinFailRes.json().catch(() => ({}));
+  if (p1WalkinFailJson.code !== "INSUFFICIENT_CASH") {
+    throw new Error(`P1-7: POS walk-in insufficient cash code must be INSUFFICIENT_CASH, got ${JSON.stringify(p1WalkinFailJson)}`);
+  }
+
+  const p1WalkinSuccessRes = await fetch(`${BASE_URL}/api/orders`, {
+    method: "POST",
+    headers: {
+      ...adminHeaders,
+      "Idempotency-Key": `smoke_pos_succ_${Date.now()}`,
+    },
+    body: JSON.stringify({
+      customerName: "SMOKE_TEST_P1_POS_Walkin_Success",
+      orderType: "TAKEAWAY",
+      paymentMethod: "CASH",
+      cashTendered: Number(sampleProduct.price) + 20,
+      items: [{ productId: sampleProduct.id, quantity: 1 }],
+    }),
+  });
+  if (!p1WalkinSuccessRes.ok) {
+    const walkinErrText = await p1WalkinSuccessRes.text();
+    throw new Error(`P1-7: POS walk-in cash order creation failed: ${p1WalkinSuccessRes.status}, ${walkinErrText}`);
+  }
+  const p1WalkinSuccessJson = await p1WalkinSuccessRes.json();
+  const p1WalkinOrder = p1WalkinSuccessJson.order || p1WalkinSuccessJson;
+  console.log("P1-7 POS walk-in order created:", p1WalkinOrder.id, "status:", p1WalkinOrder.status);
+  if (p1WalkinOrder.status !== "PAID") {
+    throw new Error(`P1-7: POS walk-in cash order must be immediately PAID, got ${p1WalkinOrder.status}`);
+  }
+
+  // P1-8: KDS Query and Pending Queue Filter Verification
+  console.log("P1-8: Testing KDS query and pending cash filter...");
+  // Create another pending customer cash order
+  const p1CustomerOrder2Res = await fetch(`${BASE_URL}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      customerName: "SMOKE_TEST_P1_Customer_Queue",
+      orderType: "DINE_IN",
+      paymentMethod: "CASH",
+      items: [{ productId: sampleProduct.id, quantity: 1 }],
+    }),
+  });
+  const p1Order2 = (await p1CustomerOrder2Res.json()).order;
+
+  // Pending Cash Queue query
+  const pendingQueueRes = await fetch(`${BASE_URL}/api/orders?status=PENDING_PAYMENT&paymentMethod=CASH`, {
+    headers: adminHeaders,
+  });
+  const pendingQueueJson = await pendingQueueRes.json();
+  const pendingList = Array.isArray(pendingQueueJson) ? pendingQueueJson : (pendingQueueJson.data || pendingQueueJson.orders || []);
+  const inPending = pendingList.some((o: any) => o.id === p1Order2.id);
+  console.log("P1-8 pending order in counter cash queue:", inPending);
+  if (!inPending) {
+    throw new Error("P1-8: newly created customer cash order must appear in pending cash queue");
+  }
+
+  // Kitchen/KDS query (should NOT contain p1Order2)
+  const kdsQueueRes = await fetch(`${BASE_URL}/api/orders?status=PAID`, {
+    headers: adminHeaders,
+  });
+  const kdsQueueJson = await kdsQueueRes.json();
+  const kdsList = Array.isArray(kdsQueueJson) ? kdsQueueJson : (kdsQueueJson.data || kdsQueueJson.orders || []);
+  const inKdsBeforePay = kdsList.some((o: any) => o.id === p1Order2.id);
+  console.log("P1-8 pending order NOT in KDS before payment:", !inKdsBeforePay);
+  if (inKdsBeforePay) {
+    throw new Error("P1-8: PENDING_PAYMENT order must NOT appear in KDS PAID list");
+  }
+
+  // Tender cash for p1Order2
+  const tenderOrder2Res = await fetch(`${BASE_URL}/api/orders/${p1Order2.id}/pay-cash`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ cashTendered: Number(p1Order2.totalAmount) }),
+  });
+  if (!tenderOrder2Res.ok) {
+    throw new Error(`P1-8: failed to tender cash for p1Order2: ${tenderOrder2Res.status}`);
+  }
+
+  // KDS query after payment (MUST contain p1Order2)
+  const kdsQueueAfterRes = await fetch(`${BASE_URL}/api/orders?status=PAID`, {
+    headers: adminHeaders,
+  });
+  const kdsQueueAfterJson = await kdsQueueAfterRes.json();
+  const kdsAfterList = Array.isArray(kdsQueueAfterJson) ? kdsQueueAfterJson : (kdsQueueAfterJson.data || kdsQueueAfterJson.orders || []);
+  const inKdsAfterPay = kdsAfterList.some((o: any) => o.id === p1Order2.id);
+  console.log("P1-8 order IN KDS after payment:", inKdsAfterPay);
+  if (!inKdsAfterPay) {
+    throw new Error("P1-8: Order must appear in KDS PAID list after cashier payment");
+  }
+
+  console.log("STEP 11h P1 CASHIER PAYMENT CONFIRMATION TESTS PASSED");
+
+  // P1-9: Cleanup of all temporary P1 orders
+  const p1OrderIds = (
+    await db.order.findMany({
+      where: {
+        OR: [
+          { customerName: { startsWith: "SMOKE_TEST_P1_" } },
+          { id: { in: [p1Order1.id, p1QrOrder.id, p1WalkinOrder.id, p1Order2.id] } },
+        ],
+      },
+      select: { id: true },
+    })
+  ).map((o) => o.id);
+
+  if (p1OrderIds.length > 0) {
+    await db.orderItemModifier.deleteMany({
+      where: { orderItem: { orderId: { in: p1OrderIds } } },
+    });
+    await db.orderItem.deleteMany({ where: { orderId: { in: p1OrderIds } } });
+    await db.order.deleteMany({ where: { id: { in: p1OrderIds } } });
+    console.log(`Cleaned up ${p1OrderIds.length} P1 test order(s).`);
+  }
+
   console.log("ALL PHASE 3 SMOKE TESTS COMPLETED SUCCESSFULLY WITH ZERO ERRORS!");
   console.log("================================================================================");
 }
