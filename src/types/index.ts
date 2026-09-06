@@ -214,7 +214,6 @@ export interface CheckoutPayload {
   customerName?: string;
   orderType?: OrderType;
   paymentMethod: PaymentMethod;
-  paymentStatus?: "PENDING" | "PAID";
   cashTendered?: number;
   notes?: string;
   discount?: number;

@@ -14,6 +14,7 @@ import {
   verifyAdminPin,
   createSignedSessionToken,
   isRequestAuthorized,
+  requireRole,
 } from "./src/lib/auth";
 import { expressAdminAuthMiddleware } from "./src/serverMiddleware";
 import {
@@ -882,17 +883,11 @@ async function processCheckout(body: CheckoutPayload) {
     }
   }
 
-  // Handle CASH paid at counter
-  if (paymentMethod === "CASH" && body.paymentStatus === "PAID") {
-    if (Number(body.cashTendered || 0) < createdOrder.totalAmount) {
-      return {
-        status: 400,
-        payload: { success: false, code: "INSUFFICIENT_CASH", message: "Cash tendered is less than the order total." },
-      };
-    }
-    await orderService.updateOrderStatus(createdOrder.id, "PAID");
-    createdOrder.status = "PAID";
-  }
+  // P0-C: the server never trusts a client-provided paymentStatus. An order is
+  // marked PAID only by an authorized payment operation (orderService
+  // .recordPayment() via the verified PayMongo webhook, or a future P1
+  // cashier-confirmation flow). Checkout orders therefore remain
+  // PENDING_PAYMENT until an authorized payment confirmation arrives (R2).
 
   // Handle QRPH PayMongo dynamic generation
   let qrCodeUrl: string | null = null;
@@ -1069,7 +1064,28 @@ app.get("/api/orders/:idOrNumber", async (req, res) => {
 });
 
 // Update order status (Staff / KDS buttons)
+// P0-B/P0-D: staff-only route. Requires a valid authenticated staff session
+// with role kds or admin. PAID is never settable here (service-enforced) and
+// lifecycle violations surface as 409 instead of being remapped to 500.
 app.patch("/api/orders/:id/status", async (req, res) => {
+  const { allowed, role } = requireRole(req, ["kds", "admin"]);
+
+  if (role === null) {
+    return res.status(401).json({
+      error: "Unauthorized: Invalid or missing staff session credentials",
+      code: "AUTH_REQUIRED",
+      message: "Please enter your 4-digit PIN to authenticate this session.",
+    });
+  }
+
+  if (!allowed) {
+    return res.status(403).json({
+      error: "Insufficient role: kitchen/admin access required",
+      code: "FORBIDDEN_ROLE",
+      message: "Your session role does not permit order status updates.",
+    });
+  }
+
   const { id } = req.params;
   const { status } = req.body as { status: OrderStatus };
 
@@ -1095,6 +1111,9 @@ app.patch("/api/orders/:id/status", async (req, res) => {
     });
   } catch (error: any) {
     console.error("Failed to update order status:", error);
+    if (error instanceof AppError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
     return res.status(500).json({ error: error?.message || "Failed to update order status" });
   }
 });
@@ -1220,7 +1239,37 @@ app.post("/api/webhooks/paymongo", handlePayMongoWebhook);
 app.post("/api/paymongo-webhook", handlePayMongoWebhook);
 
 // 9. Simulation Endpoint: /api/webhooks/paymongo/simulate, /api/simulate-webhook, /api/simulate/webhook-payment
+// P0-A — fail-closed simulation gate. Simulation is only ever usable in
+// development with PAYMONGO_SIMULATION_ENABLED=true AND by an authenticated
+// staff session. Production rejects it regardless of the flag. No customer
+// workflow may reach these endpoints.
 const handleSimulateWebhook = async (req: any, res: Response) => {
+  const simulationEnabled = process.env.PAYMONGO_SIMULATION_ENABLED === "true";
+  const isProduction = process.env.NODE_ENV === "production";
+
+  if (isProduction || !simulationEnabled) {
+    return res.status(403).json({
+      error: "Simulation webhook is disabled on this server",
+      code: "SIMULATION_DISABLED",
+    });
+  }
+
+  const { allowed, role } = requireRole(req, ["admin", "pos", "kds"]);
+
+  if (role === null) {
+    return res.status(401).json({
+      error: "Unauthorized: Invalid or missing staff session credentials",
+      code: "AUTH_REQUIRED",
+    });
+  }
+
+  if (!allowed) {
+    return res.status(403).json({
+      error: "Insufficient role: staff session required",
+      code: "FORBIDDEN_ROLE",
+    });
+  }
+
   const { orderId, paymentIntentId } = req.body || {};
 
   try {

@@ -526,11 +526,22 @@ export async function updateOrderStatus(
     );
   }
 
+  // P0-B — service boundary: PAID must only ever be reached through an
+  // authorized payment operation (recordPayment(), e.g. from the verified
+  // PayMongo webhook or a future POS cashier-confirmation flow). A generic
+  // status update must not be usable as a payment bypass.
+  if (status === "PAID") {
+    throw new AppError(
+      409,
+      "INVALID_TRANSITION",
+      `Order '${existing.orderNumber}' cannot be set to PAID via a generic status update; PAID is applied only by orderService.recordPayment()`
+    );
+  }
+
   const updated = await db.order.update({
     where: { id: existing.id },
     data: {
       status,
-      paidAt: status === "PAID" ? (existing.paidAt ?? new Date()) : undefined,
     },
     include: orderFullInclude,
   });

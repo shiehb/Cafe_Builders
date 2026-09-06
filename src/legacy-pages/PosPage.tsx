@@ -207,10 +207,10 @@ export function PosPage() {
       customerName: customerName.trim() || "Walk-in Guest",
       orderType,
       paymentMethod,
-      // R1: CASH is settled at the counter, so it clears payment immediately
-      // and lands on PAID (bill then kitchen start is a KDS action). QRPH
-      // stays PENDING_PAYMENT until the PayMongo webhook confirms payment.
-      paymentStatus: paymentMethod === "CASH" ? "PAID" : undefined,
+      // P0-C: the server never trusts client paymentStatus. Orders stay
+      // PENDING_PAYMENT until an authorized payment confirmation records them
+      // as PAID (PayMongo webhook for QRPH; future P1 cashier confirmation
+      // for CASH).
       notes: notes.trim() ? `[POS] ${notes.trim()}` : "[POS Order]",
     };
 

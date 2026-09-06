@@ -4,6 +4,12 @@ import * as inventoryService from "../src/services/inventoryService";
 import * as orderService from "../src/services/orderService";
 import * as adminService from "../src/services/adminService";
 import { createPayMongoQRPhPayment, PayMongoNotConfiguredError } from "../src/lib/paymongo";
+import dotenv from "dotenv";
+
+// Load .env so the runner's process.env matches the dev server it targets
+// (server.ts calls dotenv.config() too). This keeps the simulation-flag and
+// webhook-override assertions aligned with the running server.
+dotenv.config();
 
 const BASE_URL = "http://127.0.0.1:3000";
 
@@ -384,16 +390,47 @@ async function main() {
   console.log("Historical Snapshot Immutability TEST PASSED!");
 
   // ---------------------------------------------------------------------------
-  // STEP 7: ORDER STATUS LIFECYCLE PERSISTENCE TEST
+  // STEP 7: ORDER STATUS LIFECYCLE AUTHORIZATION TEST (P0)
   // ---------------------------------------------------------------------------
-  console.log("\n[STEP 7] Testing Order Status Lifecycle Progression via PATCH /api/orders/:id/status...");
+  console.log("\n[STEP 7] Testing Order Status Lifecycle Authorization (P0)...");
 
-  const transitions = ["PAID", "PREPARING", "READY", "COMPLETED"] as const;
+  // 7a. Unauthenticated status PATCH is rejected (P0-B).
+  const unauthPatchRes = await fetch(`${BASE_URL}/api/orders/${createdOrder.id}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "PREPARING" }),
+  });
+  if (unauthPatchRes.status !== 401) {
+    throw new Error(`Unauthenticated status PATCH must be rejected with 401, got ${unauthPatchRes.status}`);
+  }
+  console.log("7a. Unauthenticated status PATCH -> 401 (rejected)");
+
+  // 7b. Generic status PATCH attempting PAID is rejected even for an
+  //     authenticated staff session (P0-B: no payment bypass via this route).
+  const paidPatchRes = await fetch(`${BASE_URL}/api/orders/${createdOrder.id}/status`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ status: "PAID" }),
+  });
+  if (paidPatchRes.status !== 409) {
+    throw new Error(`Status PATCH to PAID must be rejected with 409, got ${paidPatchRes.status}: ${await paidPatchRes.text()}`);
+  }
+  console.log("7b. Authenticated status PATCH -> PAID rejected with 409 (no payment bypass)");
+
+  // 7c. PAID is reachable ONLY through the authorized payment mechanism.
+  const paidViaRecord = await orderService.recordPayment({ idOrOrderNumber: createdOrder.id });
+  if (paidViaRecord.status !== "PAID" || !paidViaRecord.paidAt) {
+    throw new Error("Authorized recordPayment must land the order on PAID and stamp paidAt");
+  }
+  console.log("7c. Authorized payment (recordPayment) -> PAID:", paidViaRecord.orderNumber, paidViaRecord.paidAt);
+
+  // 7d. Legitimate KDS transitions via the status route (staff session).
+  const transitions = ["PREPARING", "READY", "COMPLETED"] as const;
 
   for (const nextStatus of transitions) {
     const patchStatusRes = await fetch(`${BASE_URL}/api/orders/${createdOrder.id}/status`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: adminHeaders,
       body: JSON.stringify({ status: nextStatus }),
     });
 
@@ -433,6 +470,18 @@ async function main() {
     throw new Error(`STEP 8 checkout failed with status ${step8CheckoutRes.status}: ${JSON.stringify(step8CheckoutJson)}`);
   }
   const step8Order = step8CheckoutJson.order;
+
+  // P0 lifecycle: PENDING_PAYMENT -> PREPARING must remain impossible even for
+  // an authenticated staff session (payment-before-kitchen, R2/R1).
+  const skipToPreparingRes = await fetch(`${BASE_URL}/api/orders/${step8Order.id}/status`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ status: "PREPARING" }),
+  });
+  if (skipToPreparingRes.status !== 409) {
+    throw new Error(`PENDING_PAYMENT -> PREPARING must be rejected with 409, got ${skipToPreparingRes.status}: ${await skipToPreparingRes.text()}`);
+  }
+  console.log("PENDING_PAYMENT -> PREPARING rejected with 409 (payment-before-kitchen enforced)");
 
   const simPaymentIntent = "pi_smoke_test_intent_778899";
   const simPaymentMethod = "pm_smoke_test_card_112233";
@@ -579,7 +628,7 @@ async function main() {
   // 10.4 Invalid order status transition
   const err4Res = await fetch(`${BASE_URL}/api/orders/${createdOrder.id}/status`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: adminHeaders,
     body: JSON.stringify({ status: "INVALID_STATUS_STRING" }),
   });
   const err4Json = await err4Res.json();
@@ -900,6 +949,54 @@ async function main() {
   } else {
     if (![401, 503].includes(f11gUnsignedStatus)) {
       throw new Error(`F11 (A3): unsigned webhook must be rejected (401 with secret / 503 fail-closed), got ${f11gUnsignedStatus}`);
+    }
+  }
+
+  // -- A4: simulation endpoint authorization (P0-A) --
+  // The smoke runner shares process.env with the dev server it targets, so the
+  // runner's PAYMONGO_SIMULATION_ENABLED / NODE_ENV reflect how that server was
+  // launched (same single .env source of truth).
+  {
+    const simFlagOn = process.env.PAYMONGO_SIMULATION_ENABLED === "true";
+    const simServerProd = process.env.NODE_ENV === "production";
+
+    const probeSim = async (headers: Record<string, string>) => {
+      const r = await fetch(`${BASE_URL}/api/webhooks/paymongo/simulate`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({}),
+      });
+      return r;
+    };
+
+    // No caller may ever be granted success without satisfying every gate.
+    const unauthSimRes = await probeSim({ "Content-Type": "application/json" });
+    if (unauthSimRes.status === 200) {
+      throw new Error("F11 (A4): unauthenticated simulate call must never succeed");
+    }
+
+    if (!simFlagOn || simServerProd) {
+      // Flag absent/false, or production: rejected regardless of auth.
+      const staffSimRes = await probeSim(adminHeaders);
+      if (staffSimRes.status === 200) {
+        throw new Error("F11 (A4): simulate endpoint must never succeed when disabled or in production");
+      }
+      console.log("F11 (A4) simulate disabled/production -> rejected for all callers:", {
+        unauthStatus: unauthSimRes.status,
+        staffStatus: staffSimRes.status,
+      });
+    } else if (simFlagOn && !simServerProd) {
+      // Development + simulation enabled: an authenticated staff session passes
+      // the gate (the endpoint may then return 200 or 404 depending on whether
+      // a pending QR order exists, but never a 401/403 auth error).
+      const staffSimRes = await probeSim(adminHeaders);
+      if ([401, 403].includes(staffSimRes.status)) {
+        throw new Error(`F11 (A4): staff-authorized simulate call must pass the gate, got ${staffSimRes.status}`);
+      }
+      console.log("F11 (A4) simulation enabled (dev) -> staff session passes the gate:", {
+        unauthStatus: unauthSimRes.status,
+        staffStatus: staffSimRes.status,
+      });
     }
   }
 

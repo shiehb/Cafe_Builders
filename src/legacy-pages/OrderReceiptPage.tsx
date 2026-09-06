@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   QrCode,
   RefreshCw,
-  Sparkles,
 } from "lucide-react";
 import { Order } from "../types";
 import { formatPrice, formatDateTime } from "../lib/utils";
@@ -31,7 +30,6 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
   });
 
   const [loading, setLoading] = useState<boolean>(!order);
-  const [isSimulatingPayment, setIsSimulatingPayment] = useState<boolean>(false);
 
   // Fetch live order from server
   const fetchLiveOrder = useCallback(async () => {
@@ -70,34 +68,6 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
       [updateOrder]
     )
   );
-
-  // Simulate PayMongo Webhook Payment Verification
-  const handleSimulatePayment = async () => {
-    if (!order) return;
-    setIsSimulatingPayment(true);
-    try {
-      const res = await fetch("/api/webhooks/paymongo/simulate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: order.id,
-          paymentIntentId: order.paymentIntentId,
-        }),
-      });
-
-      const data = await res.json();
-      if (res.ok && data.order) {
-        setOrder(data.order);
-        updateOrder(data.order);
-      } else {
-        console.error("Failed to simulate payment:", data.error);
-      }
-    } catch (err: any) {
-      console.error("Simulation error:", err);
-    } finally {
-      setIsSimulatingPayment(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -312,30 +282,6 @@ export const OrderReceiptPage: React.FC<OrderReceiptPageProps> = ({ orderIdOrNum
                     </span>
                   </div>
 
-                  {/* Instant Simulation / Testing button for sandbox */}
-                  <div className="pt-2 w-full max-w-xs">
-                    <button
-                      type="button"
-                      onClick={handleSimulatePayment}
-                      disabled={isSimulatingPayment}
-                      className="w-full h-10 rounded-full bg-white hover:bg-emerald-50 text-[#00A86B] border border-emerald-300 font-bold text-[12px] flex items-center justify-center gap-1.5 shadow-2xs transition-colors cursor-pointer disabled:opacity-60 active:scale-98"
-                    >
-                      {isSimulatingPayment ? (
-                        <>
-                          <RefreshCw className="h-4 w-4 animate-spin" />
-                          <span>Verifying with PayMongo...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="h-3.5 w-3.5 text-[#00A86B]" />
-                          <span>Simulate PayMongo Payment Confirmation</span>
-                        </>
-                      )}
-                    </button>
-                    <p className="text-[9px] text-[#9CA3AF] text-center mt-1">
-                      (Test mode: triggers PayMongo payment.paid webhook simulation)
-                    </p>
-                  </div>
                 </div>
               ) : (
                 <div className="bg-white rounded-xl p-3 border border-emerald-200 flex items-center gap-3">
