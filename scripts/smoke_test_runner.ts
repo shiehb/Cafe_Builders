@@ -731,8 +731,20 @@ async function main() {
   `;
   console.log("Applied migrations in _prisma_migrations:", migrations);
 
-  if (migrations.length !== 1 || migrations[0].migration_name !== "20260904000000_init_clean_catalog") {
-    throw new Error(`_prisma_migrations violation! Found: ${JSON.stringify(migrations)}`);
+  const expectedMigrations = [
+    "20260904000000_init_clean_catalog",
+    "20260906000000_f11_a_unique_payment_intent",
+  ];
+
+  const migrationNames = migrations.map((m) => m.migration_name);
+  const matches =
+    migrationNames.length === expectedMigrations.length &&
+    expectedMigrations.every((name, idx) => migrationNames[idx] === name);
+
+  if (!matches) {
+    throw new Error(
+      `_prisma_migrations violation! Expected ${JSON.stringify(expectedMigrations)}, found: ${JSON.stringify(migrationNames)}`
+    );
   }
 
   console.log("\n================================================================================");
