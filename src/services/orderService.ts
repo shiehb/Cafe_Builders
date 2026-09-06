@@ -103,6 +103,10 @@ export function mapOrderToDto(order: DbOrderFull): OrderDto {
     subtotal: decimalToNumber(order.subtotal),
     serviceFee: decimalToNumber(order.serviceFee),
     totalAmount: decimalToNumber(order.totalAmount),
+    paidAt: order.paidAt,
+    promoCode: order.promoCode,
+    promoDiscount: decimalToNumber(order.promoDiscount),
+    promotionId: order.promotionId,
     items: itemsDto,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
@@ -267,6 +271,10 @@ async function calculateOrderItems(
       const linkedGroupIds = new Set(
         product.customizationGroups.map((pcg) => pcg.groupId)
       );
+      // Product-specific surcharge rows (enabled allowlist options).
+      const allowedOptionRows = new Map(
+        product.allowedOptions.map((ao) => [ao.optionId, ao])
+      );
       const explicitlyAllowedOptionIds = new Set(
         product.allowedOptions.map((ao) => ao.optionId)
       );
@@ -297,7 +305,13 @@ async function calculateOrderItems(
           throw new AppError(400, "OPTION_NOT_ALLOWED", `Customization option "${opt.name}" is not allowed for this product`);
         }
 
-        const priceAdjustment = decimalToNumber(opt.priceModifier);
+        // Effective pricing: ProductCustomizationOption.surcharge is the
+        // authoritative per-product price when an allowlist row exists;
+        // otherwise fall back to the option's global priceModifier.
+        const allowedRow = allowedOptionRows.get(opt.id);
+        const priceAdjustment = allowedRow
+          ? decimalToNumber(allowedRow.surcharge)
+          : decimalToNumber(opt.priceModifier);
         const modTotal = priceAdjustment * req.qty;
         itemModifierSum += modTotal;
 
@@ -459,6 +473,9 @@ export async function listOrders(options?: ListOrdersOptions): Promise<OrderDto[
   if (options?.status) {
     where.status = options.status;
   }
+  if (options?.excludeStatus?.length) {
+    where.status = { notIn: options.excludeStatus };
+  }
   if (options?.orderType) {
     where.orderType = options.orderType;
   }
@@ -481,6 +498,10 @@ export async function listOrders(options?: ListOrdersOptions): Promise<OrderDto[
  * Only legal forward transitions (plus the documented intentional overrides)
  * are accepted. Invalid status strings return 400 and illegal transitions
  * return 409 so callers get controlled errors instead of silent no-ops.
+ *
+ * R1: paidAt is stamped the moment an order enters PAID and then preserved
+ * (idempotent), so POS cash orders and PayMongo-paid orders both record when
+ * payment was confirmed.
  */
 export async function updateOrderStatus(
   idOrOrderNumber: string,
@@ -507,7 +528,10 @@ export async function updateOrderStatus(
 
   const updated = await db.order.update({
     where: { id: existing.id },
-    data: { status },
+    data: {
+      status,
+      paidAt: status === "PAID" ? (existing.paidAt ?? new Date()) : undefined,
+    },
     include: orderFullInclude,
   });
 
@@ -521,6 +545,9 @@ export async function updateOrderStatus(
  * only when that transition is legal; otherwise the current status is kept so
  * a late webhook (e.g. after COMPLETED) never moves an order backwards.
  * Payment identifiers always persist.
+ *
+ * R1: payment confirmation (webhook or POS cash) lands the order on PAID by
+ * default and stamps paidAt; the kitchen stays dark until then.
  */
 export async function recordPayment(input: {
   idOrOrderNumber: string;
@@ -535,7 +562,7 @@ export async function recordPayment(input: {
     throw new AppError(404, "ORDER_NOT_FOUND", `Order '${input.idOrOrderNumber}' not found`);
   }
 
-  const targetStatus: OrderStatus = input.status ?? "PREPARING";
+  const targetStatus: OrderStatus = input.status ?? "PAID";
   if (!isOrderStatus(targetStatus)) {
     throw new AppError(400, "INVALID_STATUS", `Status "${String(targetStatus)}" is not a valid order status`);
   }
@@ -548,6 +575,7 @@ export async function recordPayment(input: {
     where: { id: existing.id },
     data: {
       status: nextStatus,
+      paidAt: nextStatus === "PAID" ? (existing.paidAt ?? new Date()) : undefined,
       paymentIntentId: input.paymentIntentId || existing.paymentIntentId,
       paymentMethodId: input.paymentMethodId || existing.paymentMethodId,
     },

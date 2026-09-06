@@ -43,6 +43,13 @@ enum SelectionMode {
   MULTIPLE
 }
 
+/// Promotion discount model. Percent discounts are applied against the order
+/// subtotal; Fixed discounts are absolute amount reductions.
+enum PromotionDiscountType {
+  PERCENT
+  FIXED
+}
+
 // ---------------------------------------------------------------------------
 // CATEGORY (unchanged)
 // ---------------------------------------------------------------------------
@@ -72,6 +79,7 @@ model Ingredient {
   isAvailable Boolean             @default(true)
   isArchived  Boolean             @default(false)
   products    ProductIngredient[]
+  options     CustomizationOption[]
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 
@@ -91,6 +99,8 @@ model CustomizationGroup {
   sortOrder     Int                         @default(0)
   isActive      Boolean                     @default(true)
   isArchived    Boolean                     @default(false)
+  /// System-defined groups (e.g. 'SUGAR', 'ICE') that Admin cannot create/edit/archive.
+  systemKey     String?                     @unique
   options       CustomizationOption[]
   products      ProductCustomizationGroup[]
   createdAt     DateTime                    @default(now())
@@ -112,12 +122,20 @@ model CustomizationOption {
   priceModifier  Decimal                      @default(0) @db.Decimal(10, 2)
   isActive       Boolean                      @default(true)
   isArchived     Boolean                      @default(false)
+  /// Optional link to a stocked Ingredient (milk alternatives, add-ons).
+  /// Ingredient-backed options are reusable ACROSS groups/products; the
+  /// (groupId, ingredientId) unique guard only forbids duplicate options for
+  /// the same ingredient WITHIN one group. NOT unique globally by design.
+  ingredientId   String?
+  ingredient     Ingredient?                  @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
   productOptions ProductCustomizationOption[]
   modifiers      OrderItemModifier[]
   createdAt      DateTime                     @default(now())
   updatedAt      DateTime                     @updatedAt
 
   @@index([groupId])
+  @@index([ingredientId])
+  @@unique([groupId, ingredientId])
   @@map("customization_options")
 }
 
@@ -146,7 +164,8 @@ model Product {
   price               Decimal                      @db.Decimal(10, 2)
   imageUrl            String
   categoryId          String
-  category            Category                     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  /// RESTRICT: a category with products must be archived, not deleted.
+  category            Category                     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   isAvailable         Boolean                      @default(true)
   manualAvailability  Boolean                      @default(true)
   popular             Boolean                      @default(false)
@@ -155,6 +174,7 @@ model Product {
   ingredients         ProductIngredient[]
   customizationGroups ProductCustomizationGroup[]
   allowedOptions      ProductCustomizationOption[]
+  promotions          PromotionProduct[]
   createdAt           DateTime                     @default(now())
   updatedAt           DateTime                     @updatedAt
 
@@ -171,6 +191,10 @@ model ProductIngredient {
   productId    String
   ingredientId String
   isRequired   Boolean    @default(true)
+  /// Marks the product's BASE ingredient for a customization group (e.g. base milk).
+  /// The base is shown by default at zero surcharge and is never selectable as an
+  /// alternative. Plain recipe ingredients leave this false.
+  isBase       Boolean    @default(false)
   product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
   /// Restrict: ingredients must be archived (isArchived=true), not deleted.
   /// Deleting an ingredient that has active product mappings must fail at the DB level.
@@ -204,6 +228,11 @@ model ProductCustomizationGroup {
 model ProductCustomizationOption {
   productId String
   optionId  String
+  /// Product-specific customer surcharge for this option on this product.
+  /// Overrides the option's global priceModifier when this row exists.
+  surcharge Decimal  @default(0) @db.Decimal(10, 2)
+  /// Deterministic ordering of options within the product's customization.
+  sortOrder Int      @default(0)
   product   Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
   option    CustomizationOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
 
@@ -231,6 +260,13 @@ model Order {
   subtotal        Decimal       @db.Decimal(10, 2)
   serviceFee      Decimal       @default(0) @db.Decimal(10, 2)
   totalAmount     Decimal       @db.Decimal(10, 2)
+  /// Set when the order enters PAID (payment confirmed).
+  paidAt          DateTime?
+  /// Snapshot of the applied promo (single promo per order); null when none.
+  promoCode       String?
+  promoDiscount   Decimal       @default(0) @db.Decimal(10, 2)
+  promotionId     String?
+  promotion       Promotion?    @relation(fields: [promotionId], references: [id], onDelete: SetNull)
   items           OrderItem[]
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -238,6 +274,46 @@ model Order {
   @@index([status])
   @@index([createdAt])
   @@map("orders")
+}
+
+// ---------------------------------------------------------------------------
+// PROMOTION
+// Server-side promotion definitions. This is the authoritative promo source;
+// client-side discount computation must be validated/re-applied here.
+// One promo code per order is enforced at the service layer via the single
+// promotionId/ promoCode on Order.
+// ---------------------------------------------------------------------------
+
+model Promotion {
+  id               String               @id @default(cuid())
+  code             String               @unique
+  isActive         Boolean              @default(true)
+  discountType     PromotionDiscountType
+  discountValue    Decimal              @db.Decimal(10, 2)
+  minOrderAmount   Decimal?             @db.Decimal(10, 2)
+  maxDiscountAmount Decimal?            @db.Decimal(10, 2)
+  startAt          DateTime?
+  endAt            DateTime?
+  usageLimit       Int?
+  timesUsed        Int                  @default(0)
+  perCustomerLimit Int?
+  eligibleProducts PromotionProduct[]
+  orders           Order[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([isActive])
+  @@map("promotions")
+}
+
+model PromotionProduct {
+  promotionId String
+  productId   String
+  promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([promotionId, productId])
+  @@map("promotion_products")
 }
 
 // ---------------------------------------------------------------------------

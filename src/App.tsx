@@ -101,7 +101,15 @@ function CustomerApp() {
         ]);
         if (catRes.ok) {
           const catJson = await catRes.json();
-          if (catJson?.data?.length) setCategories(catJson.data);
+          if (catJson?.data?.length) {
+            // "All" is a UI pseudo-category, never persisted. Ensure it is
+            // always the first pill regardless of DB rows (and de-dupe any
+            // stale "all" row that may still be present from an older seed).
+            const realCategories = (catJson.data as Category[]).filter(
+              (c) => c.id !== "all"
+            );
+            setCategories([CATEGORIES[0], ...realCategories]);
+          }
         }
         if (prodRes.ok) {
           const prodJson = await prodRes.json();

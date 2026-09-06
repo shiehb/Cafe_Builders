@@ -14,7 +14,6 @@ import {
   Volume2,
   VolumeX,
   Radio,
-  Zap,
   CheckCircle2,
   Timer,
   AlertCircle,
@@ -54,7 +53,6 @@ export function KdsPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
-  const [simulatingWebhookId, setSimulatingWebhookId] = useState<string | null>(null);
   const [lastNotificationMsg, setLastNotificationMsg] = useState<string | null>(null);
   const [checkedItemKeys, setCheckedItemKeys] = useState<Record<string, boolean>>({});
 
@@ -77,10 +75,13 @@ export function KdsPage() {
   const fetchOrders = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch("/api/orders");
+      // KDS never shows unpaid tickets (R2). Orders that are still
+      // PENDING_PAYMENT are excluded server-side and stay invisible to the
+      // kitchen until payment is confirmed (PAID).
+      const res = await fetch("/api/orders?excludeStatus=PENDING_PAYMENT");
       if (res.ok) {
         const data = await res.json();
-        setOrders(data.data || []);
+        setOrders((data.data || []).filter((o: Order) => o.status !== "PENDING_PAYMENT"));
       }
     } catch (err) {
       console.error("Failed to load KDS orders", err);
@@ -102,6 +103,11 @@ export function KdsPage() {
       event: "order_created" | "order_paid" | "order_status_updated";
       order: Order;
     }) => {
+      // R2 gate: an unpaid PENDING_PAYMENT order must never enter the kitchen
+      // queue through the realtime feed either. Ignore such tickets entirely.
+      if (order.status === "PENDING_PAYMENT") {
+        return;
+      }
       setOrders((prev) => {
         const exists = prev.some((o) => o.id === order.id);
         if (exists) {
@@ -159,58 +165,17 @@ export function KdsPage() {
     }
   };
 
-  const handleSimulateWebhook = async (order: Order) => {
-    setSimulatingWebhookId(order.id);
-    try {
-      const res = await fetch("/api/simulate-webhook", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: order.id,
-          paymentIntentId: order.paymentIntentId,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.order) {
-          setOrders((prev) =>
-            prev.map((o) => (o.id === order.id ? data.order : o))
-          );
-          emitLocalOrderEvent("order_paid", data.order);
-        }
-        if (soundEnabled) playOrderChime();
-      }
-    } catch (err) {
-      console.error("Failed to simulate webhook", err);
-    } finally {
-      setSimulatingWebhookId(null);
-    }
-  };
-
-  // 4 Kanban Columns
-  const pendingOrders = orders.filter((o) => o.status === "PENDING_PAYMENT");
+  // 3 Kanban Columns — PENDING_PAYMENT is intentionally absent (R2): the
+  // kitchen only ever sees PAID+ tickets.
   const preparingOrders = orders.filter(
     (o) => o.status === "PREPARING" || o.status === "PAID"
   );
   const readyOrders = orders.filter((o) => o.status === "READY");
   const completedOrders = orders.filter((o) => o.status === "COMPLETED");
 
-  const activeTicketsCount = pendingOrders.length + preparingOrders.length;
+  const activeTicketsCount = preparingOrders.length;
 
   const kanbanColumns = [
-    {
-      id: "PENDING_PAYMENT",
-      title: "PENDING PAYMENT / NEW TICKETS",
-      shortTitle: "New Tickets",
-      orders: pendingOrders,
-      headerBg: "bg-transparent text-gray-900 border-b border-gray-200",
-      pillBg: "text-gray-900",
-      dotColor: "bg-gray-400",
-      emptyText: "No pending payment tickets",
-      columnBorder: "border-r border-gray-200",
-      icon: Clock,
-    },
     {
       id: "PREPARING",
       title: "PREPARING / IN PROGRESS",
@@ -296,9 +261,6 @@ export function KdsPage() {
               </span>
               <span className="text-gray-300">|</span>
               <span>
-                Pending: <strong className="font-mono">{pendingOrders.length}</strong>
-              </span>
-              <span>
                 Brewing: <strong className="font-mono">{preparingOrders.length}</strong>
               </span>
               <span>
@@ -316,7 +278,7 @@ export function KdsPage() {
           </div>
 
           {/* 4-COLUMN KANBAN BOARD CONTAINER */}
-          <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-gray-200 flex-1">
+          <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-200 flex-1">
             {kanbanColumns.map((col) => {
               const ColumnIcon = col.icon;
               return (
@@ -477,45 +439,6 @@ export function KdsPage() {
 
                             {/* Ticket Action Button at Bottom */}
                             <div className="mt-3 pt-2 border-t border-gray-100 flex flex-col gap-1.5">
-                              {order.status === "PENDING_PAYMENT" && (
-                                <div className="flex flex-col gap-1.5">
-                                  {order.paymentMethod === "CASH" ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleUpdateStatus(order.id, "PREPARING")}
-                                      className="w-full py-1.5 border border-gray-900 text-gray-900 hover:bg-gray-900 hover:text-white text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                                    >
-                                      <Check className="h-3.5 w-3.5" />
-                                      <span>Accept Cash & Brew</span>
-                                    </button>
-                                  ) : (
-                                    <div className="space-y-1.5">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleSimulateWebhook(order)}
-                                        disabled={simulatingWebhookId === order.id}
-                                        className="w-full py-1.5 border border-gray-900 text-gray-900 hover:bg-gray-900 hover:text-white text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                                        title="Simulate PayMongo webhook payment.paid event"
-                                      >
-                                        <Zap className="h-3.5 w-3.5" />
-                                        <span>
-                                          {simulatingWebhookId === order.id
-                                            ? "Firing Webhook..."
-                                            : "Simulate PayMongo Paid"}
-                                        </span>
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleUpdateStatus(order.id, "PREPARING")}
-                                        className="w-full py-1 text-gray-600 hover:text-gray-900 text-[11px] transition-all cursor-pointer flex items-center justify-center gap-1 underline"
-                                      >
-                                        <span>Manual Override & Brew</span>
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-
                               {order.status === "PAID" && (
                                 <button
                                   type="button"

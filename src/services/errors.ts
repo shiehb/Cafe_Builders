@@ -41,23 +41,26 @@ export function isOrderStatus(value: unknown): value is OrderStatus {
 // Normal lifecycle:
 //   PENDING_PAYMENT -> PAID -> PREPARING -> READY -> COMPLETED
 //
-// Documented intentional exceptions (verified against the current server & UI):
+// Payment-before-kitchen is enforced: an order may reach the kitchen (PREPARING)
+// only AFTER payment confirmation (PAID). The former PENDING_PAYMENT -> PREPARING
+// staff override has been removed (R1): both the PayMongo webhook and the POS
+// cash charge transition orders to PAID, and the kitchen then starts brewing.
 //
-//   1. PENDING_PAYMENT -> PREPARING  -- intentional staff/POS override.
-//      The POS cash charge (PosPage), KDS "Accept Cash & Brew", KDS "Manual
-//      Override & Brew", and the PayMongo webhook/simulate flow all create
-//      orders as PENDING_PAYMENT and immediately dispatch them to the kitchen.
-//      No integrated flow currently offers a standalone "Mark Paid" control, so
-//      this override is the only way those tickets reach PREPARING.
+// Documented intentional exception (kept):
 //
-//   2. COMPLETED -> READY            -- intentional KDS "Reopen" control.
+//   COMPLETED -> READY            -- intentional KDS "Reopen" control.
 //
 // Every other forward skip and every backward transition is rejected with
 // INVALID_TRANSITION (409). Self-transitions are allowed idempotently.
+//
+// NOTE: PENDING_PAYMENT orders are NEVER broadcast to the kitchen (KDS). The
+// kitchen only ever receives orders that are PAID or later. A QRPH order whose
+// webhook never fires remains PENDING_PAYMENT and is NOT visible to the KDS;
+// this is an accepted operational limitation (no manual workaround by design).
 // ---------------------------------------------------------------------------
 
 export const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
-  PENDING_PAYMENT: ["PAID", "PREPARING"],
+  PENDING_PAYMENT: ["PAID"],
   PAID: ["PREPARING"],
   PREPARING: ["READY"],
   READY: ["COMPLETED"],

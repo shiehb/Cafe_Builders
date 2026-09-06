@@ -33,6 +33,7 @@ export interface ProductCustomizationOptionData {
   groupId: string;
   name: string;
   priceModifier: number;
+  ingredientId?: string | null;
   isActive: boolean;
   isArchived?: boolean;
 }
@@ -58,7 +59,19 @@ export interface ProductCustomizationGroupData {
 export interface ProductAllowedOptionData {
   productId?: string;
   optionId: string;
+  /** Product-specific surcharge (authoritative) overriding option.priceModifier. */
+  surcharge?: number;
+  sortOrder?: number;
   option: ProductCustomizationOptionData;
+}
+
+/** Raw product-ingredient link payload from the server (matrix base selection). */
+export interface ProductIngredientData {
+  productId: string;
+  ingredientId: string;
+  isRequired: boolean;
+  isBase: boolean;
+  ingredient: Ingredient;
 }
 
 export interface Product {
@@ -95,6 +108,8 @@ export interface Product {
   customizationGroups?: ProductCustomizationGroupData[];
   /** Raw authoritative option allowlist from the server (array when a server product). */
   allowedOptions?: ProductAllowedOptionData[];
+  /** Raw authoritative ingredient links from the server (matrix base selection). */
+  ingredients?: ProductIngredientData[];
   tags?: string[];
 }
 
@@ -174,6 +189,9 @@ export interface Order {
   subtotal: number;
   discount?: number;
   promoCode?: string | null;
+  promoDiscount?: number;
+  promotionId?: string | null;
+  paidAt?: string | null;
   serviceFee: number;
   totalAmount: number;
   items: OrderItemSnapshot[];

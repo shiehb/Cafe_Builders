@@ -8,6 +8,7 @@ import {
   CreateProductInput,
   CustomizationGroupDto,
   CustomizationOptionDto,
+  IngredientDto,
   ListProductsOptions,
   ProductCustomizationGroupDto,
   ProductCustomizationOptionDto,
@@ -47,6 +48,7 @@ export const productFullInclude = {
         },
       },
     },
+    orderBy: [{ sortOrder: "asc" }, { optionId: "asc" }],
   },
 } satisfies Prisma.ProductInclude;
 
@@ -84,6 +86,7 @@ export function mapProductToDto(product: DbProductFull): ProductDto {
       productId: pi.productId,
       ingredientId: pi.ingredientId,
       isRequired: pi.isRequired,
+      isBase: pi.isBase,
       ingredient: {
         id: pi.ingredient.id,
         name: pi.ingredient.name,
@@ -94,6 +97,39 @@ export function mapProductToDto(product: DbProductFull): ProductDto {
       },
     })
   );
+
+  const toIngredientDto = (ing: DbProductFull["ingredients"][number]["ingredient"]): IngredientDto => ({
+    id: ing.id,
+    name: ing.name,
+    isAvailable: ing.isAvailable,
+    isArchived: ing.isArchived,
+    createdAt: ing.createdAt,
+    updatedAt: ing.updatedAt,
+  });
+
+  const toOptionDto = (opt: {
+    id: string;
+    groupId: string;
+    name: string;
+    priceModifier: Prisma.Decimal;
+    ingredientId: string | null;
+    isActive: boolean;
+    isArchived: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+    ingredient?: DbProductFull["ingredients"][number]["ingredient"] | null;
+  }): CustomizationOptionDto => ({
+    id: opt.id,
+    groupId: opt.groupId,
+    name: opt.name,
+    priceModifier: decimalToNumber(opt.priceModifier),
+    ingredientId: opt.ingredientId,
+    ingredient: opt.ingredient ? toIngredientDto(opt.ingredient) : null,
+    isActive: opt.isActive,
+    isArchived: opt.isArchived,
+    createdAt: opt.createdAt,
+    updatedAt: opt.updatedAt,
+  });
 
   const customizationGroupsDto: ProductCustomizationGroupDto[] = (
     product.customizationGroups || []
@@ -109,16 +145,7 @@ export function mapProductToDto(product: DbProductFull): ProductDto {
       sortOrder: pcg.group.sortOrder,
       isActive: pcg.group.isActive,
       isArchived: pcg.group.isArchived,
-      options: (pcg.group.options || []).map((opt) => ({
-        id: opt.id,
-        groupId: opt.groupId,
-        name: opt.name,
-        priceModifier: decimalToNumber(opt.priceModifier),
-        isActive: opt.isActive,
-        isArchived: opt.isArchived,
-        createdAt: opt.createdAt,
-        updatedAt: opt.updatedAt,
-      })),
+      options: (pcg.group.options || []).map((opt) => toOptionDto(opt)),
       createdAt: pcg.group.createdAt,
       updatedAt: pcg.group.updatedAt,
     },
@@ -129,16 +156,9 @@ export function mapProductToDto(product: DbProductFull): ProductDto {
   ).map((pco) => ({
     productId: pco.productId,
     optionId: pco.optionId,
-    option: {
-      id: pco.option.id,
-      groupId: pco.option.groupId,
-      name: pco.option.name,
-      priceModifier: decimalToNumber(pco.option.priceModifier),
-      isActive: pco.option.isActive,
-      isArchived: pco.option.isArchived,
-      createdAt: pco.option.createdAt,
-      updatedAt: pco.option.updatedAt,
-    },
+    surcharge: decimalToNumber(pco.surcharge),
+    sortOrder: pco.sortOrder,
+    option: toOptionDto(pco.option),
   }));
 
   return {
@@ -248,6 +268,14 @@ export async function createProduct(
   // Validate that every allowlisted option exists and belongs to a group linked
   // to the product. Prevents orphaned allowed options that would be rejected at
   // checkout (OPTION_NOT_FOUND / OPTION_NOT_ALLOWED).
+  let optionCreatesWithDefaults: Array<{
+    optionId: string;
+    // R3: when a product enables an option, its standard price (the option's
+    // priceModifier) becomes the default surcharge so checkout pricing stays
+    // identical to the pre-R3 behavior; managers can override it per product.
+    surcharge: Prisma.Decimal;
+    sortOrder: number;
+  }> = [];
   if (optionCreates.length > 0) {
     const linkedGroupIds = groupCreates.map((g) => g.groupId);
     const allowedOptionsInDb = await db.customizationOption.findMany({
@@ -256,7 +284,7 @@ export async function createProduct(
     });
     const allowedOptionMap = new Map(allowedOptionsInDb.map((o) => [o.id, o]));
 
-    for (const oc of optionCreates) {
+    optionCreatesWithDefaults = optionCreates.map((oc, idx) => {
       const opt = allowedOptionMap.get(oc.optionId);
       if (!opt) {
         throw new AppError(404, "OPTION_NOT_FOUND", `Customization option '${oc.optionId}' does not exist`);
@@ -264,7 +292,12 @@ export async function createProduct(
       if (!linkedGroupIds.includes(opt.groupId)) {
         throw new AppError(400, "INVALID_OPTION_GROUP", `Customization option "${opt.name}" belongs to a group not linked to this product`);
       }
-    }
+      return {
+        optionId: oc.optionId,
+        surcharge: opt.priceModifier,
+        sortOrder: idx,
+      };
+    });
   }
 
   // 3. Create product record
@@ -286,8 +319,8 @@ export async function createProduct(
       customizationGroups: groupCreates.length
         ? { create: groupCreates }
         : undefined,
-      allowedOptions: optionCreates.length
-        ? { create: optionCreates }
+      allowedOptions: optionCreatesWithDefaults.length
+        ? { create: optionCreatesWithDefaults }
         : undefined,
     },
   });
@@ -378,6 +411,7 @@ export async function updateProduct(
       // Validate against the incoming group list when provided, otherwise the
       // product's existing group links, so the allowlist never references an
       // option from an unlinked group.
+      let optionAllowedMap: Map<string, { name: string; groupId: string; priceModifier: Prisma.Decimal }> = new Map();
       if (input.allowedOptionIds.length > 0) {
         let linkedGroupIds: string[];
         if (input.customizationGroupIds !== undefined) {
@@ -396,10 +430,10 @@ export async function updateProduct(
           where: { id: { in: input.allowedOptionIds } },
           include: { group: true },
         });
-        const allowedOptionMap = new Map(allowedOptionsInDb.map((o) => [o.id, o]));
+        optionAllowedMap = new Map(allowedOptionsInDb.map((o) => [o.id, o]));
 
         for (const optionId of input.allowedOptionIds) {
-          const opt = allowedOptionMap.get(optionId);
+          const opt = optionAllowedMap.get(optionId);
           if (!opt) {
             throw new AppError(404, "OPTION_NOT_FOUND", `Customization option '${optionId}' does not exist`);
           }
@@ -409,13 +443,19 @@ export async function updateProduct(
         }
       }
 
+      // R3: carry each option's standard price into surcharge (override per
+      // product later) and keep deterministic sortOrder by list position.
+      const allowedRowsWithDefaults = input.allowedOptionIds.map((optionId, idx) => ({
+        productId: id,
+        optionId,
+        surcharge: optionAllowedMap.get(optionId)?.priceModifier ?? toDecimal(0),
+        sortOrder: idx,
+      }));
+
       await tx.productCustomizationOption.deleteMany({ where: { productId: id } });
-      if (input.allowedOptionIds.length > 0) {
+      if (allowedRowsWithDefaults.length > 0) {
         await tx.productCustomizationOption.createMany({
-          data: input.allowedOptionIds.map((optionId) => ({
-            productId: id,
-            optionId,
-          })),
+          data: allowedRowsWithDefaults,
         });
       }
     }

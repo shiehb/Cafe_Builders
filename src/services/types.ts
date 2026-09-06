@@ -85,6 +85,8 @@ export interface CustomizationOptionDto {
   groupId: string;
   name: string;
   priceModifier: number; // Serialized as number (Decimal in DB)
+  ingredientId: string | null; // Ingredient-backed option (milk alt/add-on)
+  ingredient?: IngredientDto | null;
   isActive: boolean;
   isArchived: boolean;
   createdAt: Date;
@@ -96,6 +98,7 @@ export interface CreateCustomizationOptionInput {
   groupId: string;
   name: string;
   priceModifier?: number;
+  ingredientId?: string | null;
   isActive?: boolean;
 }
 
@@ -103,6 +106,7 @@ export interface UpdateCustomizationOptionInput {
   groupId?: string;
   name?: string;
   priceModifier?: number;
+  ingredientId?: string | null;
   isActive?: boolean;
   isArchived?: boolean;
 }
@@ -146,6 +150,7 @@ export interface ProductIngredientDto {
   productId: string;
   ingredientId: string;
   isRequired: boolean;
+  isBase: boolean; // true = the product's default ingredient (matrix "base")
   ingredient: IngredientDto;
 }
 
@@ -159,6 +164,10 @@ export interface ProductCustomizationGroupDto {
 export interface ProductCustomizationOptionDto {
   productId: string;
   optionId: string;
+  // Product-specific surcharge: overrides the option's priceModifier when the
+  // product has an explicit allowlist row (authoritative server pricing).
+  surcharge: number;
+  sortOrder: number; // Deterministic option ordering within the product
   option: CustomizationOptionDto;
 }
 
@@ -258,6 +267,10 @@ export interface OrderDto {
   subtotal: number; // Serialized as number (Decimal in DB)
   serviceFee: number; // Serialized as number (Decimal in DB)
   totalAmount: number; // Serialized as number (Decimal in DB)
+  paidAt: Date | null; // Stamped when the order enters PAID (R1)
+  promoCode: string | null; // Reserved for promotion redemption (R5)
+  promoDiscount: number; // Serialized as number (Decimal in DB)
+  promotionId: string | null;
   items: OrderItemDto[];
   createdAt: Date;
   updatedAt: Date;
@@ -294,6 +307,7 @@ export interface CreateOrderInput {
 
 export interface ListOrdersOptions {
   status?: OrderStatus;
+  excludeStatus?: OrderStatus[]; // e.g. KDS hides PENDING_PAYMENT
   limit?: number;
   orderType?: OrderType;
 }

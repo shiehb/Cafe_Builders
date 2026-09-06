@@ -437,11 +437,12 @@ async function main() {
   const simPaymentIntent = "pi_smoke_test_intent_778899";
   const simPaymentMethod = "pm_smoke_test_card_112233";
 
+  // R1: payment confirmation (webhook/POS) lands on PAID and stamps paidAt;
+  // the kitchen only starts brewing after an explicit PAID -> PREPARING.
   const recordedOrder = await orderService.recordPayment({
     idOrOrderNumber: step8Order.id,
     paymentIntentId: simPaymentIntent,
     paymentMethodId: simPaymentMethod,
-    status: "PREPARING",
   });
 
   console.log("Payment record returned:", {
@@ -449,6 +450,7 @@ async function main() {
     paymentIntentId: recordedOrder.paymentIntentId,
     paymentMethodId: recordedOrder.paymentMethodId,
     status: recordedOrder.status,
+    paidAt: recordedOrder.paidAt,
   });
 
   // Verify persistence by querying fresh from DB
@@ -459,8 +461,11 @@ async function main() {
   if (dbOrder?.paymentMethodId !== simPaymentMethod) {
     throw new Error("paymentMethodId failed to persist in DB");
   }
-  if (dbOrder?.status !== "PREPARING") {
-    throw new Error("Order status failed to persist in DB");
+  if (dbOrder?.status !== "PAID") {
+    throw new Error(`Order status failed to persist in DB (R1 expects PAID, got ${dbOrder?.status})`);
+  }
+  if (!dbOrder?.paidAt) {
+    throw new Error("paidAt was not stamped on R1 PAID transition");
   }
   console.log("Payment persistence TEST PASSED!");
 
@@ -673,7 +678,12 @@ async function main() {
     where: { name: { startsWith: "SMOKE_TEST_" } },
   });
 
-  // Verify DB counts are completely clean
+  // Verify no SMOKE_TEST_* records remain across the domain tables.
+  // NOTE: The catalog now hosts a permanent DEV/MOCK baseline (19 products,
+  // ingredients, groups, options) seeded by prisma/seed.ts, so the catalog is
+  // intentionally NON-empty after cleanup. This assertion therefore verifies
+  // that ONLY the smoke test's own prefixed data has been removed rather than
+  // demanding an empty database.
   const finalCounts = {
     categories: await db.category.count(),
     ingredients: await db.ingredient.count(),
@@ -686,9 +696,27 @@ async function main() {
   };
   console.log("Post-cleanup database counts:", finalCounts);
 
-  for (const [table, count] of Object.entries(finalCounts)) {
+  const smokeResidue = {
+    categories: await db.category.count({ where: { name: { startsWith: "SMOKE_TEST_" } } }),
+    ingredients: await db.ingredient.count({ where: { name: { startsWith: "SMOKE_TEST_" } } }),
+    customizationGroups: await db.customizationGroup.count({ where: { name: { startsWith: "SMOKE_TEST_" } } }),
+    customizationOptions: await db.customizationOption.count({ where: { name: { startsWith: "SMOKE_TEST_" } } }),
+    products: await db.product.count({ where: { name: { startsWith: "SMOKE_TEST_" } } }),
+    orders: await db.order.count({
+      where: {
+        OR: [
+          { customerName: { startsWith: "SMOKE_TEST_" } },
+          { customerName: { startsWith: "Concurrent_Customer_" } },
+          { id: createdOrder.id },
+        ],
+      },
+    }),
+  };
+  console.log("Smoke-test residue after cleanup:", smokeResidue);
+
+  for (const [table, count] of Object.entries(smokeResidue)) {
     if (count !== 0) {
-      throw new Error(`Cleanup failed: Table ${table} still has ${count} records!`);
+      throw new Error(`Cleanup failed: Table ${table} still has ${count} SMOKE_TEST_ record(s)!`);
     }
   }
   console.log("Database cleanup verified: 0 smoke test records remain!");
@@ -734,6 +762,7 @@ async function main() {
   const expectedMigrations = [
     "20260904000000_init_clean_catalog",
     "20260906000000_f11_a_unique_payment_intent",
+    "20260906000001_m5_domain_design",
   ];
 
   const migrationNames = migrations.map((m) => m.migration_name);
@@ -875,6 +904,25 @@ async function main() {
   }
 
   console.log("STEP 11g F11-A PAYMENT INTEGRITY HARDENING TESTS PASSED");
+
+  // STEP 11g created a control order (SMOKE_TEST_F11_DUP) for the duplicate
+  // paymentIntentId test. It is created after STEP 11 cleanup, so remove it
+  // here to leave the database exactly at the persisted DEV baseline (0 orders).
+  const f11gOrderIds = (
+    await db.order.findMany({
+      where: { customerName: "SMOKE_TEST_F11_DUP" },
+      select: { id: true },
+    })
+  ).map((o) => o.id);
+  if (f11gOrderIds.length > 0) {
+    await db.orderItemModifier.deleteMany({
+      where: { orderItem: { orderId: { in: f11gOrderIds } } },
+    });
+    await db.orderItem.deleteMany({ where: { orderId: { in: f11gOrderIds } } });
+    await db.order.deleteMany({ where: { id: { in: f11gOrderIds } } });
+    console.log(`Removed ${f11gOrderIds.length} F11 control order(s) for clean end state.`);
+  }
+
   console.log("ALL PHASE 3 SMOKE TESTS COMPLETED SUCCESSFULLY WITH ZERO ERRORS!");
   console.log("================================================================================");
 }

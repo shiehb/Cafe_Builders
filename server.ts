@@ -952,8 +952,15 @@ async function processCheckout(body: CheckoutPayload) {
     createdOrder.paymentMethodId = paymentMethodId;
   }
 
-  // Broadcast realtime order_created to Kitchen KDS and customer live stream
-  broadcastRealtime("order_created", createdOrder as any);
+  // Broadcast realtime order_created to Kitchen KDS and customer live stream.
+  // R2: unpaid PENDING_PAYMENT tickets are NEVER announced to the kitchen —
+  // only the order's later order_paid/status events (broadcast on payment
+  // confirmation) surface them. If a QRPH webhook never fires, the order stays
+  // PENDING_PAYMENT and is simply never seen by the KDS (documented
+  // operational limitation, no manual workaround by design).
+  if (createdOrder.status !== "PENDING_PAYMENT") {
+    broadcastRealtime("order_created", createdOrder as any);
+  }
 
   return {
     status: 201,
@@ -1028,8 +1035,15 @@ app.post("/api/orders", async (req, res) => {
 // Get all orders (for staff / KDS dashboard)
 app.get("/api/orders", async (req, res) => {
   try {
+    // excludeStatus: comma-separated statuses to hide, e.g.
+    // ?excludeStatus=PENDING_PAYMENT keeps unpaid tickets off the KDS (R2).
+    const excludeStatus = String(req.query.excludeStatus || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean) as OrderStatus[];
     const list = await orderService.listOrders({
       status: req.query.status as any,
+      excludeStatus: excludeStatus.length ? excludeStatus : undefined,
       orderType: req.query.orderType as any,
     });
     res.json({ data: list });
@@ -1173,14 +1187,16 @@ const handlePayMongoWebhook = async (req: any, res: Response) => {
         });
 
         if (matched) {
+          // R1: payment confirmation lands the order on PAID (default).
+          // The kitchen starts only after an explicit Start Brewing (PAID ->
+          // PREPARING). We never auto-jump straight to PREPARING anymore.
           const updatedOrder = await orderService.recordPayment({
             idOrOrderNumber: matched.id,
             paymentIntentId,
-            status: "PREPARING",
           });
 
           console.log(
-            `[PayMongo Webhook] Order ${updatedOrder.orderNumber} successfully updated to PREPARING`
+            `[PayMongo Webhook] Order ${updatedOrder.orderNumber} successfully updated to PAID`
           );
           broadcastRealtime("order_paid", updatedOrder as any);
 
@@ -1188,7 +1204,7 @@ const handlePayMongoWebhook = async (req: any, res: Response) => {
             success: true,
             matchedOrderNumber: updatedOrder.orderNumber,
             status: updatedOrder.status,
-            message: "Order updated to PREPARING and broadcast to Kitchen KDS",
+            message: "Order updated to PAID and broadcast to Kitchen KDS",
           });
         }
       } catch (err) {
@@ -1238,7 +1254,6 @@ const handleSimulateWebhook = async (req: any, res: Response) => {
 
     const updated = await orderService.recordPayment({
       idOrOrderNumber: targetOrder.id,
-      status: "PREPARING",
     });
 
     broadcastRealtime("order_paid", updated as any);

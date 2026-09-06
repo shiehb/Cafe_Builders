@@ -207,6 +207,10 @@ export function PosPage() {
       customerName: customerName.trim() || "Walk-in Guest",
       orderType,
       paymentMethod,
+      // R1: CASH is settled at the counter, so it clears payment immediately
+      // and lands on PAID (bill then kitchen start is a KDS action). QRPH
+      // stays PENDING_PAYMENT until the PayMongo webhook confirms payment.
+      paymentStatus: paymentMethod === "CASH" ? "PAID" : undefined,
       notes: notes.trim() ? `[POS] ${notes.trim()}` : "[POS Order]",
     };
 
@@ -224,19 +228,6 @@ export function PosPage() {
 
       const data = await res.json();
       if (data.order) {
-        if (paymentMethod === "CASH") {
-          try {
-            await fetch(`/api/orders/${data.order.id}/status`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ status: "PREPARING" }),
-            });
-            data.order.status = "PREPARING";
-          } catch {
-            // ignore
-          }
-        }
-
         setLastChargedOrder(data.order);
         emitLocalOrderEvent("order_created", data.order);
         playOrderChime();

@@ -252,6 +252,7 @@ export function mapCustomizationOptionToDto(option: {
   groupId: string;
   name: string;
   priceModifier: any;
+  ingredientId?: string | null;
   isActive: boolean;
   isArchived: boolean;
   createdAt: Date;
@@ -262,6 +263,8 @@ export function mapCustomizationOptionToDto(option: {
     groupId: option.groupId,
     name: option.name,
     priceModifier: decimalToNumber(option.priceModifier),
+    ingredientId: option.ingredientId ?? null,
+    ingredient: null,
     isActive: option.isActive,
     isArchived: option.isArchived,
     createdAt: option.createdAt,
@@ -322,6 +325,7 @@ export async function createCustomizationOption(
       groupId: input.groupId,
       name: input.name.trim(),
       priceModifier: toDecimal(input.priceModifier ?? 0),
+      ingredientId: input.ingredientId ?? null,
       isActive: input.isActive !== false,
       isArchived: false,
     },
@@ -342,6 +346,7 @@ export async function updateCustomizationOption(
       name: input.name !== undefined ? input.name.trim() : undefined,
       groupId: input.groupId !== undefined ? input.groupId : undefined,
       priceModifier: input.priceModifier !== undefined ? toDecimal(input.priceModifier) : undefined,
+      ingredientId: input.ingredientId !== undefined ? input.ingredientId : undefined,
       isActive: input.isActive !== undefined ? input.isActive : undefined,
       isArchived: input.isArchived !== undefined ? input.isArchived : undefined,
     },
