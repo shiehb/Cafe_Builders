@@ -417,11 +417,28 @@ async function main() {
   // ---------------------------------------------------------------------------
   console.log("\n[STEP 8] Testing orderService.recordPayment() with simulated IDs...");
 
+  const step8CheckoutRes = await fetch(`${BASE_URL}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      customerName: "SMOKE_TEST_Payment_Customer",
+      orderType: "DINE_IN",
+      paymentMethod: "GCASH",
+      items: [{ productId: testProduct.id, quantity: 1 }],
+    }),
+  });
+
+  const step8CheckoutJson = await step8CheckoutRes.json();
+  if (step8CheckoutRes.status !== 201 || !step8CheckoutJson.success) {
+    throw new Error(`STEP 8 checkout failed with status ${step8CheckoutRes.status}: ${JSON.stringify(step8CheckoutJson)}`);
+  }
+  const step8Order = step8CheckoutJson.order;
+
   const simPaymentIntent = "pi_smoke_test_intent_778899";
   const simPaymentMethod = "pm_smoke_test_card_112233";
 
   const recordedOrder = await orderService.recordPayment({
-    idOrOrderNumber: createdOrder.id,
+    idOrOrderNumber: step8Order.id,
     paymentIntentId: simPaymentIntent,
     paymentMethodId: simPaymentMethod,
     status: "PREPARING",
@@ -435,7 +452,7 @@ async function main() {
   });
 
   // Verify persistence by querying fresh from DB
-  const dbOrder = await db.order.findUnique({ where: { id: createdOrder.id } });
+  const dbOrder = await db.order.findUnique({ where: { id: step8Order.id } });
   if (dbOrder?.paymentIntentId !== simPaymentIntent) {
     throw new Error("paymentIntentId failed to persist in DB");
   }

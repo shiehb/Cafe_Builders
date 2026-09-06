@@ -103,6 +103,7 @@ export interface Category {
   name: string;
   slug: string;
   description?: string;
+  icon?: string;
   iconName?: string;
   sortOrder: number;
   productType?: "BEVERAGE" | "FOOD";

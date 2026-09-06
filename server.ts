@@ -3,8 +3,9 @@ import crypto from "crypto";
 import cookieParser from "cookie-parser";
 import next from "next";
 import dotenv from "dotenv";
-import { createPayMongoQRPhPayment } from "./src/lib/paymongo";
 import { createPayMongoQRPhPayment, PayMongoNotConfiguredError } from "./src/lib/paymongo";
+import { AppError } from "./src/services/errors";
+import { CATEGORIES, PRODUCTS } from "./src/data/menuData";
 import { Order, OrderStatus, CheckoutPayload, Product } from "./src/types";
 import { broadcastKitchenOrder, broadcastProductUpdate } from "./src/lib/supabase";
 import { getDb } from "./src/lib/prisma";
@@ -253,6 +254,15 @@ app.post("/api/auth/logout", (_req, res) => {
 app.get("/api/categories", async (_req, res) => {
   try {
     const categories = await adminService.listCategories();
+    if (!categories || categories.length === 0) {
+      return res.json({
+        data: CATEGORIES.map((c) => ({
+          ...c,
+          iconName: c.icon || undefined,
+          isActive: true,
+        })),
+      });
+    }
     res.json({
       data: categories.map((c) => ({
         ...c,
@@ -261,8 +271,14 @@ app.get("/api/categories", async (_req, res) => {
       })),
     });
   } catch (error: any) {
-    console.error("Failed to list categories:", error);
-    res.status(500).json({ error: error?.message || "Failed to list categories" });
+    console.error("Failed to list categories, using fallback:", error);
+    res.json({
+      data: CATEGORIES.map((c) => ({
+        ...c,
+        iconName: c.icon || undefined,
+        isActive: true,
+      })),
+    });
   }
 });
 
@@ -280,10 +296,34 @@ app.get("/api/products", async (req, res) => {
       isAvailable: availableOnly ? true : undefined,
     });
 
+    if (!products || products.length === 0) {
+      const filtered = PRODUCTS.filter((item) => {
+        const matchesCategory =
+          !categoryId ||
+          categoryId === "all" ||
+          item.categoryId === categoryId ||
+          item.categoryName === categoryId;
+        const matchesAvailable = !availableOnly || item.isAvailable;
+        return matchesCategory && matchesAvailable;
+      });
+      return res.json({ data: filtered.map(formatProductForClient) });
+    }
+
     res.json({ data: products.map(formatProductForClient) });
   } catch (error: any) {
-    console.error("Failed to list products:", error);
-    res.status(500).json({ error: error?.message || "Failed to list products" });
+    console.error("Failed to list products, using fallback:", error);
+    const categoryId = req.query.category as string;
+    const availableOnly = req.query.availableOnly === "true";
+    const filtered = PRODUCTS.filter((item) => {
+      const matchesCategory =
+        !categoryId ||
+        categoryId === "all" ||
+        item.categoryId === categoryId ||
+        item.categoryName === categoryId;
+      const matchesAvailable = !availableOnly || item.isAvailable;
+      return matchesCategory && matchesAvailable;
+    });
+    res.json({ data: filtered.map(formatProductForClient) });
   }
 });
 
@@ -291,13 +331,22 @@ app.get("/api/products", async (req, res) => {
 app.get("/api/products/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const product = await catalogService.getProductById(id);
+    let product = await catalogService.getProductById(id);
     if (!product) {
+      const staticProd = PRODUCTS.find((p) => p.id === id);
+      if (staticProd) {
+        return res.json({ product: formatProductForClient(staticProd) });
+      }
       return res.status(404).json({ error: "Product not found" });
     }
     res.json({ product: formatProductForClient(product) });
   } catch (error: any) {
-    console.error("Failed to get product:", error);
+    console.error("Failed to get product, checking fallback:", error);
+    const { id } = req.params;
+    const staticProd = PRODUCTS.find((p) => p.id === id);
+    if (staticProd) {
+      return res.json({ product: formatProductForClient(staticProd) });
+    }
     res.status(500).json({ error: error?.message || "Failed to get product" });
   }
 });
@@ -306,9 +355,19 @@ app.get("/api/products/:id", async (req, res) => {
 app.get("/api/catalog", async (req, res) => {
   try {
     const availableOnly = req.query.availableOnly === "true";
-    const products = await catalogService.listProducts({
+    let products = await catalogService.listProducts({
       isAvailable: availableOnly ? true : undefined,
     });
+
+    if (!products || products.length === 0) {
+      products = (PRODUCTS as any[]).map((p) => ({
+        ...p,
+        manualAvailability: p.isAvailable,
+        category: { id: p.categoryId, name: p.categoryName || p.categoryId },
+        customizationGroups: [],
+        allowedOptions: [],
+      }));
+    }
 
     const data = products.map((product) => {
       const formatted = formatProductForClient(product);
@@ -317,12 +376,12 @@ app.get("/api/catalog", async (req, res) => {
         basePrice: product.price,
         productType: product.category?.name?.toLowerCase().includes("food") || product.category?.name?.toLowerCase().includes("pastr") ? "FOOD" : "BEVERAGE",
         categories: [{ id: product.categoryId, name: product.category?.name || product.categoryId }],
-        customizationGroups: (product.customizationGroups || []).map((cg) => ({
+        customizationGroups: (product.customizationGroups || []).map((cg: any) => ({
           id: cg.groupId,
           name: cg.group?.name || cg.groupId,
           selectionMode: cg.group?.selectionMode || "SINGLE",
           required: cg.group?.isRequired || false,
-          options: (cg.group?.options || []).map((o) => ({
+          options: (cg.group?.options || []).map((o: any) => ({
             id: o.id,
             name: o.name,
             price: o.priceModifier,
@@ -334,8 +393,19 @@ app.get("/api/catalog", async (req, res) => {
 
     res.json({ data });
   } catch (error: any) {
-    console.error("Failed to get catalog:", error);
-    res.status(500).json({ error: error?.message || "Failed to get catalog" });
+    console.error("Failed to get catalog, using fallback:", error);
+    const data = PRODUCTS.map((product) => {
+      const formatted = formatProductForClient(product);
+      return {
+        ...formatted,
+        basePrice: product.price,
+        productType: product.categoryName?.toLowerCase().includes("food") || product.categoryName?.toLowerCase().includes("pastr") ? "FOOD" : "BEVERAGE",
+        categories: [{ id: product.categoryId, name: product.categoryName || product.categoryId }],
+        customizationGroups: [],
+        availabilityReason: product.isAvailable ? null : "MANUAL_UNAVAILABLE",
+      };
+    });
+    res.json({ data });
   }
 });
 
@@ -837,33 +907,34 @@ async function processCheckout(body: CheckoutPayload) {
    // leaves a phantom, unpayable PENDING_PAYMENT order in the staff queue
    // (it was never broadcast and its payment ids are null, so nothing binding
    // to it can exist).
-   try {
   if (paymentMethod === "QRPH") {
-    const qrRes = await createPayMongoQRPhPayment(
-      createdOrder.totalAmount,
-      createdOrder.orderNumber,
-      `Artisan Cafe - Order ${createdOrder.orderNumber}`
-    );
-    qrCodeUrl = qrRes.qrImageUrl;
-      } catch (err) {
-        await db.order
-          .delete({ where: { id: createdOrder.id } })
-          .catch((cleanupErr: unknown) => {
-            console.warn("[Checkout] Could not remove unfinalized order after QR failure:", cleanupErr);
-          });
-        if (err instanceof PayMongoNotConfiguredError) {
-          throw new AppError(
-            503,
-            "PAYMENT_UNAVAILABLE",
-            "Online payment is not available for this order. Please pay at the counter."
-          );
-        }
+    let qrRes;
+    try {
+      qrRes = await createPayMongoQRPhPayment(
+        createdOrder.totalAmount,
+        createdOrder.orderNumber,
+        `Artisan Cafe - Order ${createdOrder.orderNumber}`
+      );
+      qrCodeUrl = qrRes.qrImageUrl;
+    } catch (err) {
+      await db.order
+        .delete({ where: { id: createdOrder.id } })
+        .catch((cleanupErr: unknown) => {
+          console.warn("[Checkout] Could not remove unfinalized order after QR failure:", cleanupErr);
+        });
+      if (err instanceof PayMongoNotConfiguredError) {
         throw new AppError(
           503,
-          "PAYMENT_PROVIDER_UNAVAILABLE",
-          "Payment provider could not be reached. Please try again or pay at the counter."
+          "PAYMENT_UNAVAILABLE",
+          "Online payment is not available for this order. Please pay at the counter."
         );
       }
+      throw new AppError(
+        503,
+        "PAYMENT_PROVIDER_UNAVAILABLE",
+        "Payment provider could not be reached. Please try again or pay at the counter."
+      );
+    }
     paymentIntentId = qrRes.paymentIntentId;
     paymentMethodId = qrRes.paymentMethodId;
 
@@ -1051,55 +1122,34 @@ function verifySignature(
 }
 
 // 8. PayMongo Webhook API Endpoint: /api/webhooks/paymongo & /api/paymongo-webhook
-  // F11-A3 — fail-closed webhook secret policy.
-   //
-   // A configured secret always gates the request via F3 signature verification,
-   // and a missing/bad signature is always rejected. The only exception to
-   // signature enforcement is an EXPLICIT, clearly named, off-by-default
-   // development override (PAYMONGO_ALLOW_UNSIGNED_WEBHOOKS_DEV=true). That
-   // override:
-   //   - defaults OFF (an unset/any-non-"true" value keeps verification on),
-   //   - is IGNORED in production (NODE_ENV === "production"), and
-   //   - is IGNORED when a webhook secret IS configured (a real signature is
-   //     still required and verified).
-   // Production therefore rejects unsigned webhooks regardless of the override.
-   // This preserves the previous fail-closed production 503 when the secret is
-   // missing, while removing the old behavior of silently accepting unsigned
-   // webhooks in development just because NODE_ENV was not "production".
-   const allowUnsignedDevOnly =
-     !isProduction && process.env.PAYMONGO_ALLOW_UNSIGNED_WEBHOOKS_DEV === "true";
-
-   if (webhookSecret) {
-     if (!verifySignature(rawBody, signatureHeader, webhookSecret)) {
-       console.warn("[PayMongo Webhook] Invalid webhook signature rejected");
-       return res.status(401).json({ error: "Invalid signature" });
-     }
-   } else if (!allowUnsignedDevOnly) {
-     // No secret configured and the explicit dev override is not enabled.
-     // In production this is the documented fail-closed 503. In development the
-     // override must be explicitly enabled before unsigned events are accepted.
-     console.warn("[PayMongo Webhook] Rejecting webhook: PAYMONGO_WEBHOOK_SECRET_KEY is not configured");
-     return res.status(503).json({
-       error: "Webhook signature verification is not configured on this server.",
-       code: "WEBHOOK_SECRET_NOT_CONFIGURED",
-     });
-   }
-   // else: dev-only, explicit override enabled, no secret configured -> allow.
-   // Log loudly because processing unsigned events in dev is intentional but risky.
-   if (!webhookSecret && allowUnsignedDevOnly) {
-     console.warn(
-       "[PayMongo Webhook] WARNING: accepting unsigned webhook in development " +
-         "(PAYMONGO_ALLOW_UNSIGNED_WEBHOOKS_DEV=true and no PAYMONGO_WEBHOOK_SECRET_KEY)."
-     );
-   }
 const handlePayMongoWebhook = async (req: any, res: Response) => {
   const signatureHeader = req.headers["paymongo-signature"] as string | undefined;
   const webhookSecret = process.env.PAYMONGO_WEBHOOK_SECRET_KEY;
   const rawBody = req.rawBody || JSON.stringify(req.body);
+  const isProduction = process.env.NODE_ENV === "production";
 
-  if (webhookSecret && !verifySignature(rawBody, signatureHeader, webhookSecret)) {
-    console.warn("[PayMongo Webhook] Invalid webhook signature rejected");
-    return res.status(401).json({ error: "Invalid signature" });
+  // F11-A3 — fail-closed webhook secret policy.
+  const allowUnsignedDevOnly =
+    !isProduction && process.env.PAYMONGO_ALLOW_UNSIGNED_WEBHOOKS_DEV === "true";
+
+  if (webhookSecret) {
+    if (!verifySignature(rawBody, signatureHeader, webhookSecret)) {
+      console.warn("[PayMongo Webhook] Invalid webhook signature rejected");
+      return res.status(401).json({ error: "Invalid signature" });
+    }
+  } else if (!allowUnsignedDevOnly) {
+    console.warn("[PayMongo Webhook] Rejecting webhook: PAYMONGO_WEBHOOK_SECRET_KEY is not configured");
+    return res.status(503).json({
+      error: "Webhook signature verification is not configured on this server.",
+      code: "WEBHOOK_SECRET_NOT_CONFIGURED",
+    });
+  }
+
+  if (!webhookSecret && allowUnsignedDevOnly) {
+    console.warn(
+      "[PayMongo Webhook] WARNING: accepting unsigned webhook in development " +
+        "(PAYMONGO_ALLOW_UNSIGNED_WEBHOOKS_DEV=true and no PAYMONGO_WEBHOOK_SECRET_KEY)."
+    );
   }
 
   const event = req.body;
