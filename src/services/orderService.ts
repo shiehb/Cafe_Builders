@@ -112,14 +112,10 @@ export function mapOrderToDto(order: DbOrderFull): OrderDto {
 /**
  * Generates the next sequential order number for the current calendar day (e.g. "C-001").
  *
- * Runs inside the creating transaction and takes a Postgres daily advisory lock
- * so concurrent checkouts serialize their count+insert and never collide on the
- * same "C-###" number. The lock is released automatically when the transaction
- * commits or rolls back.
+ * Must be called within a transaction that already holds the daily advisory lock.
+ * The caller is responsible for acquiring the lock before invoking this function.
  */
 async function generateOrderNumber(tx: Prisma.TransactionClient): Promise<string> {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('cafe_orders_' || to_char(current_date, 'YYYYMMDD')))`;
-
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
@@ -382,11 +378,14 @@ export async function createOrder(input: CreateOrderInput): Promise<OrderDto> {
   // Execute entire order creation within an atomic transaction
   const createdOrder = await db.$transaction(
     async (tx) => {
+      // Acquire daily advisory lock to serialize order number generation
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(748291048)`;
+
       const { calculatedItems, orderSubtotal, serviceFee, totalAmount } =
         await calculateOrderItems(tx, input.items, input.serviceFee);
 
-    // 3. Generate unique order number (serialized per-day under advisory lock)
-    const orderNumber = await generateOrderNumber(tx);
+      // 3. Generate unique order number (serialized per-day under advisory lock)
+      const orderNumber = await generateOrderNumber(tx);
 
     // 4. Determine initial status
     const initialStatus: OrderStatus =

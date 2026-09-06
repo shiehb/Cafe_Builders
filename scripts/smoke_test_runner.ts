@@ -723,8 +723,7 @@ async function main() {
   // ---------------------------------------------------------------------------
   // STEP 11g: F11-A PAYMENT INTEGRITY HARDENING TESTS
   // ---------------------------------------------------------------------------
-  console.log("
-[STEP 11g] Testing F11-A payment integrity hardening...");
+  console.log("\n[STEP 11g] Testing F11-A payment integrity hardening...");
 
   // -- A1: no silent simulated fallback; explicit failure; simulation gated --
   {
@@ -783,8 +782,8 @@ async function main() {
   }
 
   // -- A2: DB-level unique payment binding --
-  const f11DupIntent = `pi_smoke_f11_dup_${Date.now()}";
-  const f11DupNumber = `C-${7000 + Math.floor(Math.random() * 9000)}";
+  const f11DupIntent = `pi_smoke_f11_dup_${Date.now()}`;
+  const f11DupNumber = `C-${7000 + Math.floor(Math.random() * 9000)}`;
   await db.order.create({
     data: {
       orderNumber: f11DupNumber,
@@ -801,7 +800,7 @@ async function main() {
   try {
     await db.order.create({
       data: {
-        orderNumber: `C-${7000 + Math.floor(Math.random() * 9000)}",
+        orderNumber: `C-${7000 + Math.floor(Math.random() * 9000)}`,
         status: "PENDING_PAYMENT",
         paymentMethod: "QRPH",
         paymentIntentId: f11DupIntent,
@@ -820,7 +819,7 @@ async function main() {
   }
 
   // -- A3: unsigned webhook policy --
-  const f11gUnsigned = await fetch(`${BASE_URL}/api/webhooks/paymongo", {
+  const f11gUnsigned = await fetch(`${BASE_URL}/api/webhooks/paymongo`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -831,8 +830,8 @@ async function main() {
           data: { id: "pay_f11g", attributes: { amount: 1, status: "paid", payment_intent_id: "pi_f11g_unsigned" } },
         },
       },
-    });
-  };
+    }),
+  });
   const f11gUnsignedStatus = f11gUnsigned.status;
   const f11gUnsignedJson = await f11gUnsigned.json().catch(() => ({}));
   console.log("F11 (A3) unsigned webhook:", f11gUnsignedStatus, JSON.stringify(f11gUnsignedJson));
